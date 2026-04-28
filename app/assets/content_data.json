@@ -1,0 +1,591 @@
+{
+  "animals": [
+    {
+      "id": "animals_krowa",
+      "filename": "animals/krowa.webp",
+      "audio_pl": "pl/animal_krowa.mp3",
+      "audio_en": "en/animal_krowa.mp3",
+      "pl": "Krowa",
+      "en": "Cow",
+      "sound_pl": "Muuu!",
+      "sound_en": "Moo!",
+      "desc": "cow, black and white spotted farm cow"
+    },
+    {
+      "id": "animals_kot",
+      "filename": "animals/kot.webp",
+      "audio_pl": "pl/animal_kot.mp3",
+      "audio_en": "en/animal_kot.mp3",
+      "pl": "Kot",
+      "en": "Cat",
+      "sound_pl": "Miau!",
+      "sound_en": "Meow!",
+      "desc": "cat, cute fluffy orange tabby kitten"
+    },
+    {
+      "id": "animals_pies",
+      "filename": "animals/pies.webp",
+      "audio_pl": "pl/animal_pies.mp3",
+      "audio_en": "en/animal_pies.mp3",
+      "pl": "Pies",
+      "en": "Dog",
+      "sound_pl": "Hau hau!",
+      "sound_en": "Woof woof!",
+      "desc": "dog, friendly golden retriever puppy"
+    },
+    {
+      "id": "animals_kura",
+      "filename": "animals/kura.webp",
+      "audio_pl": "pl/animal_kura.mp3",
+      "audio_en": "en/animal_kura.mp3",
+      "pl": "Kura",
+      "en": "Chicken",
+      "sound_pl": "Ko ko ko!",
+      "sound_en": "Cluck cluck!",
+      "desc": "chicken, brown hen with red comb"
+    },
+    {
+      "id": "animals_kogut",
+      "filename": "animals/kogut.webp",
+      "audio_pl": "pl/animal_kogut.mp3",
+      "audio_en": "en/animal_kogut.mp3",
+      "pl": "Kogut",
+      "en": "Rooster",
+      "sound_pl": "Kukuryku!",
+      "sound_en": "Cock-a-doodle-doo!",
+      "desc": "rooster, colorful rooster with big red comb and tail feathers"
+    },
+    {
+      "id": "animals_kaczka",
+      "filename": "animals/kaczka.webp",
+      "audio_pl": "pl/animal_kaczka.mp3",
+      "audio_en": "en/animal_kaczka.mp3",
+      "pl": "Kaczka",
+      "en": "Duck",
+      "sound_pl": "Kwa kwa!",
+      "sound_en": "Quack quack!",
+      "desc": "duck, white and yellow duck on water"
+    },
+    {
+      "id": "animals_kon",
+      "filename": "animals/kon.webp",
+      "audio_pl": "pl/animal_kon.mp3",
+      "audio_en": "en/animal_kon.mp3",
+      "pl": "Koń",
+      "en": "Horse",
+      "sound_pl": "Ihaha!",
+      "sound_en": "Neigh!",
+      "desc": "horse, brown horse with dark mane"
+    },
+    {
+      "id": "animals_swinia",
+      "filename": "animals/swinia.webp",
+      "audio_pl": "pl/animal_swinia.mp3",
+      "audio_en": "en/animal_swinia.mp3",
+      "pl": "Świnia",
+      "en": "Pig",
+      "sound_pl": "Chrum chrum!",
+      "sound_en": "Oink oink!",
+      "desc": "pig, pink round piglet with curly tail"
+    },
+    {
+      "id": "animals_owca",
+      "filename": "animals/owca.webp",
+      "audio_pl": "pl/animal_owca.mp3",
+      "audio_en": "en/animal_owca.mp3",
+      "pl": "Owca",
+      "en": "Sheep",
+      "sound_pl": "Bee!",
+      "sound_en": "Baa!",
+      "desc": "sheep, fluffy white woolly sheep"
+    },
+    {
+      "id": "animals_koza",
+      "filename": "animals/koza.webp",
+      "audio_pl": "pl/animal_koza.mp3",
+      "audio_en": "en/animal_koza.mp3",
+      "pl": "Koza",
+      "en": "Goat",
+      "sound_pl": "Mee!",
+      "sound_en": "Meh!",
+      "desc": "goat, white goat with small horns and beard"
+    },
+    {
+      "id": "animals_osiol",
+      "filename": "animals/osiol.webp",
+      "audio_pl": "pl/animal_osiol.mp3",
+      "audio_en": "en/animal_osiol.mp3",
+      "pl": "Osioł",
+      "en": "Donkey",
+      "sound_pl": "Iaa!",
+      "sound_en": "Hee-haw!",
+      "desc": "donkey, grey donkey with big ears"
+    }
+  ],
+  "letters_pl": [
+    {
+      "id": "letters_pl_a",
+      "filename": "letters/pl/a_arbuz.webp",
+      "audio": "pl/letter_a.mp3",
+      "letter": "A",
+      "word": "Arbuz",
+      "desc": "watermelon, big round green striped fruit with red inside"
+    },
+    {
+      "id": "letters_pl_b",
+      "filename": "letters/pl/b_banan.webp",
+      "audio": "pl/letter_b.mp3",
+      "letter": "B",
+      "word": "Banan",
+      "desc": "banana, yellow curved tropical fruit"
+    },
+    {
+      "id": "letters_pl_c",
+      "filename": "letters/pl/c_cytryna.webp",
+      "audio": "pl/letter_c.mp3",
+      "letter": "C",
+      "word": "Cytryna",
+      "desc": "lemon, bright yellow oval citrus fruit"
+    },
+    {
+      "id": "letters_pl_d",
+      "filename": "letters/pl/d_dynia.webp",
+      "audio": "pl/letter_d.mp3",
+      "letter": "D",
+      "word": "Dynia",
+      "desc": "pumpkin, large round orange vegetable"
+    },
+    {
+      "id": "letters_pl_f",
+      "filename": "letters/pl/f_fasola.webp",
+      "audio": "pl/letter_f.mp3",
+      "letter": "F",
+      "word": "Fasola",
+      "desc": "green beans, long green string bean pods"
+    },
+    {
+      "id": "letters_pl_g",
+      "filename": "letters/pl/g_gruszka.webp",
+      "audio": "pl/letter_g.mp3",
+      "letter": "G",
+      "word": "Gruszka",
+      "desc": "pear, green yellow pear-shaped fruit"
+    },
+    {
+      "id": "letters_pl_j",
+      "filename": "letters/pl/j_jabłko.webp",
+      "audio": "pl/letter_j.mp3",
+      "letter": "J",
+      "word": "Jabłko",
+      "desc": "apple, round red and green fruit"
+    },
+    {
+      "id": "letters_pl_k",
+      "filename": "letters/pl/k_kiwi.webp",
+      "audio": "pl/letter_k.mp3",
+      "letter": "K",
+      "word": "Kiwi",
+      "desc": "kiwi fruit, small brown fuzzy oval fruit with green inside"
+    },
+    {
+      "id": "letters_pl_m",
+      "filename": "letters/pl/m_malina.webp",
+      "audio": "pl/letter_m.mp3",
+      "letter": "M",
+      "word": "Malina",
+      "desc": "raspberry, small red berry fruit"
+    },
+    {
+      "id": "letters_pl_n",
+      "filename": "letters/pl/n_nektarynka.webp",
+      "audio": "pl/letter_n.mp3",
+      "letter": "N",
+      "word": "Nektarynka",
+      "desc": "nectarine, smooth round orange-red stone fruit"
+    },
+    {
+      "id": "letters_pl_o",
+      "filename": "letters/pl/o_ogórek.webp",
+      "audio": "pl/letter_o.mp3",
+      "letter": "O",
+      "word": "Ogórek",
+      "desc": "cucumber, long green vegetable"
+    },
+    {
+      "id": "letters_pl_p",
+      "filename": "letters/pl/p_pomidor.webp",
+      "audio": "pl/letter_p.mp3",
+      "letter": "P",
+      "word": "Pomidor",
+      "desc": "tomato, round red shiny vegetable"
+    },
+    {
+      "id": "letters_pl_r",
+      "filename": "letters/pl/r_rzodkiewka.webp",
+      "audio": "pl/letter_r.mp3",
+      "letter": "R",
+      "word": "Rzodkiewka",
+      "desc": "radish, small round red root vegetable with white inside"
+    },
+    {
+      "id": "letters_pl_s",
+      "filename": "letters/pl/s_sałata.webp",
+      "audio": "pl/letter_s.mp3",
+      "letter": "S",
+      "word": "Sałata",
+      "desc": "lettuce, leafy green salad vegetable"
+    },
+    {
+      "id": "letters_pl_ś",
+      "filename": "letters/pl/ś_śliwka.webp",
+      "audio": "pl/letter_ś.mp3",
+      "letter": "Ś",
+      "word": "Śliwka",
+      "desc": "plum, small oval purple-blue fruit"
+    },
+    {
+      "id": "letters_pl_t",
+      "filename": "letters/pl/t_truskawka.webp",
+      "audio": "pl/letter_t.mp3",
+      "letter": "T",
+      "word": "Truskawka",
+      "desc": "strawberry, red heart-shaped berry with seeds"
+    },
+    {
+      "id": "letters_pl_w",
+      "filename": "letters/pl/w_winogrono.webp",
+      "audio": "pl/letter_w.mp3",
+      "letter": "W",
+      "word": "Winogrono",
+      "desc": "grape, small round purple or green fruit in bunches"
+    },
+    {
+      "id": "letters_pl_z",
+      "filename": "letters/pl/z_ziemniak.webp",
+      "audio": "pl/letter_z.mp3",
+      "letter": "Z",
+      "word": "Ziemniak",
+      "desc": "potato, round brown root vegetable"
+    }
+  ],
+  "letters_en": [
+    {
+      "id": "letters_en_a",
+      "filename": "letters/en/a_apple.webp",
+      "audio": "en/letter_a.mp3",
+      "letter": "A",
+      "word": "Apple",
+      "desc": "apple, round red and green fruit"
+    },
+    {
+      "id": "letters_en_b",
+      "filename": "letters/en/b_banana.webp",
+      "audio": "en/letter_b.mp3",
+      "letter": "B",
+      "word": "Banana",
+      "desc": "banana, yellow curved tropical fruit"
+    },
+    {
+      "id": "letters_en_c",
+      "filename": "letters/en/c_carrot.webp",
+      "audio": "en/letter_c.mp3",
+      "letter": "C",
+      "word": "Carrot",
+      "desc": "carrot, long orange root vegetable"
+    },
+    {
+      "id": "letters_en_d",
+      "filename": "letters/en/d_date.webp",
+      "audio": "en/letter_d.mp3",
+      "letter": "D",
+      "word": "Date",
+      "desc": "date fruit, small brown oval dried fruit"
+    },
+    {
+      "id": "letters_en_e",
+      "filename": "letters/en/e_eggplant.webp",
+      "audio": "en/letter_e.mp3",
+      "letter": "E",
+      "word": "Eggplant",
+      "desc": "eggplant, large purple oval vegetable"
+    },
+    {
+      "id": "letters_en_f",
+      "filename": "letters/en/f_fig.webp",
+      "audio": "en/letter_f.mp3",
+      "letter": "F",
+      "word": "Fig",
+      "desc": "fig, ripe purple fig cut in half showing red inside"
+    },
+    {
+      "id": "letters_en_g",
+      "filename": "letters/en/g_grape.webp",
+      "audio": "en/letter_g.mp3",
+      "letter": "G",
+      "word": "Grape",
+      "desc": "grape, small round purple fruit in bunches"
+    },
+    {
+      "id": "letters_en_k",
+      "filename": "letters/en/k_kiwi.webp",
+      "audio": "en/letter_k.mp3",
+      "letter": "K",
+      "word": "Kiwi",
+      "desc": "kiwi fruit, small brown fuzzy oval fruit with green inside"
+    },
+    {
+      "id": "letters_en_l",
+      "filename": "letters/en/l_lemon.webp",
+      "audio": "en/letter_l.mp3",
+      "letter": "L",
+      "word": "Lemon",
+      "desc": "lemon, bright yellow oval citrus fruit"
+    },
+    {
+      "id": "letters_en_m",
+      "filename": "letters/en/m_mango.webp",
+      "audio": "en/letter_m.mp3",
+      "letter": "M",
+      "word": "Mango",
+      "desc": "mango, large oval tropical fruit, yellow-orange"
+    },
+    {
+      "id": "letters_en_n",
+      "filename": "letters/en/n_nectarine.webp",
+      "audio": "en/letter_n.mp3",
+      "letter": "N",
+      "word": "Nectarine",
+      "desc": "nectarine, smooth round orange-red stone fruit"
+    },
+    {
+      "id": "letters_en_o",
+      "filename": "letters/en/o_orange.webp",
+      "audio": "en/letter_o.mp3",
+      "letter": "O",
+      "word": "Orange",
+      "desc": "orange, round citrus fruit, bright orange color"
+    },
+    {
+      "id": "letters_en_p",
+      "filename": "letters/en/p_peach.webp",
+      "audio": "en/letter_p.mp3",
+      "letter": "P",
+      "word": "Peach",
+      "desc": "peach, round fuzzy orange-pink stone fruit"
+    },
+    {
+      "id": "letters_en_r",
+      "filename": "letters/en/r_raspberry.webp",
+      "audio": "en/letter_r.mp3",
+      "letter": "R",
+      "word": "Raspberry",
+      "desc": "raspberry, small red berry fruit"
+    },
+    {
+      "id": "letters_en_s",
+      "filename": "letters/en/s_strawberry.webp",
+      "audio": "en/letter_s.mp3",
+      "letter": "S",
+      "word": "Strawberry",
+      "desc": "strawberry, red heart-shaped berry with seeds"
+    },
+    {
+      "id": "letters_en_t",
+      "filename": "letters/en/t_tomato.webp",
+      "audio": "en/letter_t.mp3",
+      "letter": "T",
+      "word": "Tomato",
+      "desc": "tomato, round red shiny vegetable"
+    },
+    {
+      "id": "letters_en_w",
+      "filename": "letters/en/w_watermelon.webp",
+      "audio": "en/letter_w.mp3",
+      "letter": "W",
+      "word": "Watermelon",
+      "desc": "watermelon, big round green striped fruit with red inside"
+    },
+    {
+      "id": "letters_en_z",
+      "filename": "letters/en/z_zucchini.webp",
+      "audio": "en/letter_z.mp3",
+      "letter": "Z",
+      "word": "Zucchini",
+      "desc": "zucchini, long green summer squash vegetable"
+    }
+  ],
+  "numbers": [
+    {
+      "id": "numbers_0",
+      "filename": "numbers/0.webp",
+      "audio_pl": "pl/number_0.mp3",
+      "audio_en": "en/number_0.mp3",
+      "pl": "Zero",
+      "en": "Zero",
+      "desc": "the digit 0"
+    },
+    {
+      "id": "numbers_1",
+      "filename": "numbers/1.webp",
+      "audio_pl": "pl/number_1.mp3",
+      "audio_en": "en/number_1.mp3",
+      "pl": "Jeden",
+      "en": "One",
+      "desc": "the digit 1"
+    },
+    {
+      "id": "numbers_2",
+      "filename": "numbers/2.webp",
+      "audio_pl": "pl/number_2.mp3",
+      "audio_en": "en/number_2.mp3",
+      "pl": "Dwa",
+      "en": "Two",
+      "desc": "the digit 2"
+    },
+    {
+      "id": "numbers_3",
+      "filename": "numbers/3.webp",
+      "audio_pl": "pl/number_3.mp3",
+      "audio_en": "en/number_3.mp3",
+      "pl": "Trzy",
+      "en": "Three",
+      "desc": "the digit 3"
+    },
+    {
+      "id": "numbers_4",
+      "filename": "numbers/4.webp",
+      "audio_pl": "pl/number_4.mp3",
+      "audio_en": "en/number_4.mp3",
+      "pl": "Cztery",
+      "en": "Four",
+      "desc": "the digit 4"
+    },
+    {
+      "id": "numbers_5",
+      "filename": "numbers/5.webp",
+      "audio_pl": "pl/number_5.mp3",
+      "audio_en": "en/number_5.mp3",
+      "pl": "Pięć",
+      "en": "Five",
+      "desc": "the digit 5"
+    },
+    {
+      "id": "numbers_6",
+      "filename": "numbers/6.webp",
+      "audio_pl": "pl/number_6.mp3",
+      "audio_en": "en/number_6.mp3",
+      "pl": "Sześć",
+      "en": "Six",
+      "desc": "the digit 6"
+    },
+    {
+      "id": "numbers_7",
+      "filename": "numbers/7.webp",
+      "audio_pl": "pl/number_7.mp3",
+      "audio_en": "en/number_7.mp3",
+      "pl": "Siedem",
+      "en": "Seven",
+      "desc": "the digit 7"
+    },
+    {
+      "id": "numbers_8",
+      "filename": "numbers/8.webp",
+      "audio_pl": "pl/number_8.mp3",
+      "audio_en": "en/number_8.mp3",
+      "pl": "Osiem",
+      "en": "Eight",
+      "desc": "the digit 8"
+    },
+    {
+      "id": "numbers_9",
+      "filename": "numbers/9.webp",
+      "audio_pl": "pl/number_9.mp3",
+      "audio_en": "en/number_9.mp3",
+      "pl": "Dziewięć",
+      "en": "Nine",
+      "desc": "the digit 9"
+    }
+  ],
+  "colors": [
+    {
+      "id": "colors_czerwony",
+      "audio_pl": "pl/color_czerwony.mp3",
+      "audio_en": "en/color_czerwony.mp3",
+      "pl": "Czerwony",
+      "en": "Red",
+      "hex": "#FF0000"
+    },
+    {
+      "id": "colors_niebieski",
+      "audio_pl": "pl/color_niebieski.mp3",
+      "audio_en": "en/color_niebieski.mp3",
+      "pl": "Niebieski",
+      "en": "Blue",
+      "hex": "#0066FF"
+    },
+    {
+      "id": "colors_zielony",
+      "audio_pl": "pl/color_zielony.mp3",
+      "audio_en": "en/color_zielony.mp3",
+      "pl": "Zielony",
+      "en": "Green",
+      "hex": "#00CC00"
+    },
+    {
+      "id": "colors_zolty",
+      "audio_pl": "pl/color_zolty.mp3",
+      "audio_en": "en/color_zolty.mp3",
+      "pl": "Żółty",
+      "en": "Yellow",
+      "hex": "#FFD700"
+    },
+    {
+      "id": "colors_pomaranczowy",
+      "audio_pl": "pl/color_pomaranczowy.mp3",
+      "audio_en": "en/color_pomaranczowy.mp3",
+      "pl": "Pomarańczowy",
+      "en": "Orange",
+      "hex": "#FF8C00"
+    },
+    {
+      "id": "colors_fioletowy",
+      "audio_pl": "pl/color_fioletowy.mp3",
+      "audio_en": "en/color_fioletowy.mp3",
+      "pl": "Fioletowy",
+      "en": "Purple",
+      "hex": "#8B00FF"
+    },
+    {
+      "id": "colors_rozowy",
+      "audio_pl": "pl/color_rozowy.mp3",
+      "audio_en": "en/color_rozowy.mp3",
+      "pl": "Różowy",
+      "en": "Pink",
+      "hex": "#FF69B4"
+    },
+    {
+      "id": "colors_bialy",
+      "audio_pl": "pl/color_bialy.mp3",
+      "audio_en": "en/color_bialy.mp3",
+      "pl": "Biały",
+      "en": "White",
+      "hex": "#FFFFFF"
+    },
+    {
+      "id": "colors_czarny",
+      "audio_pl": "pl/color_czarny.mp3",
+      "audio_en": "en/color_czarny.mp3",
+      "pl": "Czarny",
+      "en": "Black",
+      "hex": "#222222"
+    },
+    {
+      "id": "colors_brazowy",
+      "audio_pl": "pl/color_brazowy.mp3",
+      "audio_en": "en/color_brazowy.mp3",
+      "pl": "Brązowy",
+      "en": "Brown",
+      "hex": "#8B4513"
+    }
+  ]
+}
