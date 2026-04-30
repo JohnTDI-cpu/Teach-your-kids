@@ -1,4 +1,6 @@
-// Auto-generated Asset Map
+// Auto-generated Asset Map - do not edit by hand.
+// Regenerate with: python3 generate_asset_map.py
+
 export const AudioAssets: Record<string, any> = {
   "en/animal_kaczka.mp3": require("./assets/audio/en/animal_kaczka.mp3"),
   "en/animal_kogut.mp3": require("./assets/audio/en/animal_kogut.mp3"),
@@ -101,7 +103,6 @@ export const AudioAssets: Record<string, any> = {
 };
 
 export const ImageAssets: Record<string, any> = {
-  "krowa.webp": require("./assets/images/krowa.webp"),
   "animals/kaczka.webp": require("./assets/images/animals/kaczka.webp"),
   "animals/kogut.webp": require("./assets/images/animals/kogut.webp"),
   "animals/kon.webp": require("./assets/images/animals/kon.webp"),
@@ -113,12 +114,60 @@ export const ImageAssets: Record<string, any> = {
   "animals/owca.webp": require("./assets/images/animals/owca.webp"),
   "animals/pies.webp": require("./assets/images/animals/pies.webp"),
   "animals/swinia.webp": require("./assets/images/animals/swinia.webp"),
+  "krowa.webp": require("./assets/images/krowa.webp"),
+  "letters/en/a_apple.webp": require("./assets/images/letters/en/a_apple.webp"),
+  "letters/en/b_banana.webp": require("./assets/images/letters/en/b_banana.webp"),
+  "letters/en/c_carrot.webp": require("./assets/images/letters/en/c_carrot.webp"),
+  "letters/en/d_date.webp": require("./assets/images/letters/en/d_date.webp"),
+  "letters/en/e_eggplant.webp": require("./assets/images/letters/en/e_eggplant.webp"),
+  "letters/en/g_grape.webp": require("./assets/images/letters/en/g_grape.webp"),
+  "letters/en/k_kiwi.webp": require("./assets/images/letters/en/k_kiwi.webp"),
+  "letters/en/l_lemon.webp": require("./assets/images/letters/en/l_lemon.webp"),
+  "letters/en/m_mango.webp": require("./assets/images/letters/en/m_mango.webp"),
+  "letters/en/n_nectarine.webp": require("./assets/images/letters/en/n_nectarine.webp"),
+  "letters/en/o_orange.webp": require("./assets/images/letters/en/o_orange.webp"),
+  "letters/en/p_peach.webp": require("./assets/images/letters/en/p_peach.webp"),
+  "letters/en/r_raspberry.webp": require("./assets/images/letters/en/r_raspberry.webp"),
+  "letters/en/s_strawberry.webp": require("./assets/images/letters/en/s_strawberry.webp"),
+  "letters/en/t_tomato.webp": require("./assets/images/letters/en/t_tomato.webp"),
+  "letters/en/w_watermelon.webp": require("./assets/images/letters/en/w_watermelon.webp"),
+  "letters/en/z_zucchini.webp": require("./assets/images/letters/en/z_zucchini.webp"),
   "letters/pl/a_arbuz.webp": require("./assets/images/letters/pl/a_arbuz.webp"),
   "letters/pl/b_banan.webp": require("./assets/images/letters/pl/b_banan.webp"),
   "letters/pl/c_cytryna.webp": require("./assets/images/letters/pl/c_cytryna.webp"),
   "letters/pl/d_dynia.webp": require("./assets/images/letters/pl/d_dynia.webp"),
-  "letters/pl/f_figa.webp": require("./assets/images/letters/pl/f_figa.webp"),
+  "letters/pl/f_fasola.webp": require("./assets/images/letters/pl/f_fasola.webp"),
   "letters/pl/g_gruszka.webp": require("./assets/images/letters/pl/g_gruszka.webp"),
   "letters/pl/j_jabłko.webp": require("./assets/images/letters/pl/j_jabłko.webp"),
   "letters/pl/k_kiwi.webp": require("./assets/images/letters/pl/k_kiwi.webp"),
+  "letters/pl/m_malina.webp": require("./assets/images/letters/pl/m_malina.webp"),
+  "letters/pl/n_nektarynka.webp": require("./assets/images/letters/pl/n_nektarynka.webp"),
+  "letters/pl/o_ogórek.webp": require("./assets/images/letters/pl/o_ogórek.webp"),
+  "letters/pl/p_pomidor.webp": require("./assets/images/letters/pl/p_pomidor.webp"),
+  "letters/pl/r_rzodkiewka.webp": require("./assets/images/letters/pl/r_rzodkiewka.webp"),
+  "letters/pl/s_sałata.webp": require("./assets/images/letters/pl/s_sałata.webp"),
+  "letters/pl/t_truskawka.webp": require("./assets/images/letters/pl/t_truskawka.webp"),
+  "letters/pl/w_winogrono.webp": require("./assets/images/letters/pl/w_winogrono.webp"),
+  "letters/pl/z_ziemniak.webp": require("./assets/images/letters/pl/z_ziemniak.webp"),
+  "letters/pl/ś_śliwka.webp": require("./assets/images/letters/pl/ś_śliwka.webp"),
+  "numbers/0.webp": require("./assets/images/numbers/0.webp"),
+  "numbers/1.webp": require("./assets/images/numbers/1.webp"),
+  "numbers/2.webp": require("./assets/images/numbers/2.webp"),
+  "numbers/3.webp": require("./assets/images/numbers/3.webp"),
+  "numbers/4.webp": require("./assets/images/numbers/4.webp"),
+  "numbers/5.webp": require("./assets/images/numbers/5.webp"),
+  "numbers/6.webp": require("./assets/images/numbers/6.webp"),
+  "numbers/7.webp": require("./assets/images/numbers/7.webp"),
+  "numbers/8.webp": require("./assets/images/numbers/8.webp"),
+  "numbers/9.webp": require("./assets/images/numbers/9.webp"),
+};
+
+export const MenuAssets: Record<string, any> = {
+  "bg_animals.webp": require("./assets/menu/bg_animals.webp"),
+  "bg_colors.webp": require("./assets/menu/bg_colors.webp"),
+  "bg_letters.webp": require("./assets/menu/bg_letters.webp"),
+  "bg_main.webp": require("./assets/menu/bg_main.webp"),
+  "bg_numbers.webp": require("./assets/menu/bg_numbers.webp"),
+  "icon_child.webp": require("./assets/menu/icon_child.webp"),
+  "icon_parent.webp": require("./assets/menu/icon_parent.webp"),
 };

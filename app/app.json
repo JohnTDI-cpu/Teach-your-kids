@@ -1,31 +1,56 @@
 {
-    "expo":  {
-                 "name":  "app",
-                 "slug":  "app",
-                 "version":  "1.0.0",
-                 "orientation":  "portrait",
-                 "icon":  "./assets/icon.png",
-                 "userInterfaceStyle":  "light",
-                 "newArchEnabled":  true,
-                 "splash":  {
-                                "image":  "./assets/splash-icon.png",
-                                "resizeMode":  "contain",
-                                "backgroundColor":  "#ffffff"
-                            },
-                 "ios":  {
-                             "supportsTablet":  true
-                         },
-                 "android":  {
-                                 "adaptiveIcon":  {
-                                                      "foregroundImage":  "./assets/adaptive-icon.png",
-                                                      "backgroundColor":  "#ffffff"
-                                                  },
-                                 "edgeToEdgeEnabled":  true,
-                                 "predictiveBackGestureEnabled":  false,
-                                 "package":  "com.teachyourkids.app"
-                             },
-                 "web":  {
-                             "favicon":  "./assets/favicon.png"
-                         }
-             }
+  "expo": {
+    "name": "Teach Your Kids",
+    "slug": "app",
+    "version": "1.0.0",
+    "orientation": "landscape",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "Rodzic może nagrać własny głos do każdego obrazka, żeby dziecko słyszało znajomy głos.",
+        "NSPhotoLibraryUsageDescription": "Rodzic może dodać własne zdjęcie jako nową fiszkę.",
+        "NSCameraUsageDescription": "Rodzic może zrobić zdjęcie i dodać je jako nową fiszkę."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "edgeToEdgeEnabled": true,
+      "predictiveBackGestureEnabled": false,
+      "package": "com.teachyourkids.app",
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.READ_MEDIA_IMAGES"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Rodzic może dodać własne zdjęcie jako nową fiszkę.",
+          "cameraPermission": "Rodzic może zrobić zdjęcie i dodać je jako nową fiszkę."
+        }
+      ],
+      [
+        "expo-av",
+        {
+          "microphonePermission": "Rodzic może nagrać własny głos do każdego obrazka."
+        }
+      ]
+    ]
+  }
 }

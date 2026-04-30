@@ -310,14 +310,6 @@
       "desc": "eggplant, large purple oval vegetable"
     },
     {
-      "id": "letters_en_f",
-      "filename": "letters/en/f_fig.webp",
-      "audio": "en/letter_f.mp3",
-      "letter": "F",
-      "word": "Fig",
-      "desc": "fig, ripe purple fig cut in half showing red inside"
-    },
-    {
       "id": "letters_en_g",
       "filename": "letters/en/g_grape.webp",
       "audio": "en/letter_g.mp3",

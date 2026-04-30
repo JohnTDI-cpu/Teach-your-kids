@@ -1,242 +1,412 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, Animated, Easing, Image, NativeModules, TextInput, Alert } from 'react-native';
-import { Audio } from 'expo-av';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import {
+  StyleSheet,
+  Text,
+  View,
+  TouchableOpacity,
+  Animated,
+  Easing,
+  Image,
+  NativeModules,
+  TextInput,
+  Alert,
+  StatusBar as RNStatusBar,
+  ImageBackground,
+} from 'react-native';
+import { Audio, AVPlaybackStatus } from 'expo-av';
 import * as ScreenOrientation from 'expo-screen-orientation';
-import contentData from './assets/content_data.json';
-import { AudioAssets, ImageAssets } from './AssetMap';
+
+import { AudioAssets, ImageAssets, MenuAssets } from './AssetMap';
+import {
+  CategoryId,
+  PersistedState,
+  loadState,
+  saveState,
+  ensureDirs,
+  buildItemsForCategory,
+  MergedItem,
+} from './state';
+import { ParentApp } from './ParentApp';
 
 const { KioskModule } = NativeModules;
 
-// ... keeping FlashcardGame untouched ...
-// ==========================================
-// EKRAN: FISZKI (Tryb Dziecko)
-// ==========================================
-function FlashcardGame({ category, onBack }) {
-  const [currentItem, setCurrentItem] = useState(null);
-  const [sound, setSound] = useState<Audio.Sound | null>(null);
-  const [words, setWords] = useState<string[]>([]);
-  
+/* ============================================================
+   Audio gating helper — resolves a MergedItem to a playable
+   source and returns a promise that resolves when playback ends.
+============================================================ */
+
+function resolveAudioSource(item: MergedItem): { source: any; key: string } | null {
+  if (item.customAudioUri) {
+    return { source: { uri: item.customAudioUri }, key: 'custom:' + item.customAudioUri };
+  }
+  if (item.builtinAudioKey && AudioAssets[item.builtinAudioKey]) {
+    return { source: AudioAssets[item.builtinAudioKey], key: item.builtinAudioKey };
+  }
+  return null;
+}
+
+function resolveImageSource(item: MergedItem): any {
+  if (!item.imageSource) return null;
+  if (item.imageSource.__builtinImage) {
+    return ImageAssets[item.imageSource.__builtinImage] ?? null;
+  }
+  return item.imageSource; // { uri: 'file://...' } for custom
+}
+
+/* ============================================================
+   FLASHCARD — child mode. Audio gating: tap to advance is disabled
+   until current sound has finished playing.
+============================================================ */
+
+type FlashcardProps = {
+  category: CategoryId;
+  state: PersistedState;
+  onBack: () => void;
+};
+
+function FlashcardGame({ category, state, onBack }: FlashcardProps) {
+  const items = useMemo(
+    () => buildItemsForCategory(category, state, 'pl'),
+    [category, state],
+  );
+
+  const [currentItem, setCurrentItem] = useState<MergedItem | null>(null);
+  const [isAudioPlaying, setIsAudioPlaying] = useState(false);
+  const soundRef = useRef<Audio.Sound | null>(null);
+  const lastIndexRef = useRef<number>(-1);
+
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const wordsAnim = useRef<Animated.Value[]>([]).current;
+  const lockShake = useRef(new Animated.Value(0)).current;
+  const [words, setWords] = useState<string[]>([]);
 
-  // Prepare items based on selected category
-  const items = React.useMemo(() => {
-    switch(category) {
-      case 'letters': return contentData.letters_pl;
-      case 'numbers': return contentData.numbers;
-      case 'animals': return contentData.animals;
-      case 'colors': return contentData.colors;
-      default: return contentData.animals;
+  // Pick a different item than previous one if possible
+  const getRandomItem = useCallback((): MergedItem | null => {
+    if (items.length === 0) return null;
+    if (items.length === 1) return items[0];
+    let idx = Math.floor(Math.random() * items.length);
+    if (idx === lastIndexRef.current) idx = (idx + 1) % items.length;
+    lastIndexRef.current = idx;
+    return items[idx];
+  }, [items]);
+
+  const animateChange = useCallback(
+    (newText: string) => {
+      const newWords = newText.split(' ');
+      setWords(newWords);
+
+      wordsAnim.length = 0;
+      newWords.forEach(() => wordsAnim.push(new Animated.Value(-200)));
+
+      scaleAnim.setValue(0.5);
+      Animated.spring(scaleAnim, { toValue: 1, friction: 4, useNativeDriver: true }).start();
+
+      Animated.parallel(
+        wordsAnim.map((anim, i) =>
+          Animated.timing(anim, {
+            toValue: 0,
+            duration: 380,
+            delay: i * 200,
+            easing: Easing.bounce,
+            useNativeDriver: true,
+          }),
+        ),
+      ).start();
+    },
+    [scaleAnim, wordsAnim],
+  );
+
+  const playAudioFor = useCallback(async (item: MergedItem) => {
+    // Always unload any previous sound
+    if (soundRef.current) {
+      try {
+        await soundRef.current.unloadAsync();
+      } catch {}
+      soundRef.current = null;
     }
-  }, [category]);
 
-  const getRandomItem = () => {
-    const randomIndex = Math.floor(Math.random() * items.length);
-    return items[randomIndex];
-  };
+    const resolved = resolveAudioSource(item);
+    if (!resolved) {
+      // No audio at all → nothing to wait for; flag as "ready immediately"
+      setIsAudioPlaying(false);
+      return;
+    }
 
+    setIsAudioPlaying(true);
+    try {
+      const { sound } = await Audio.Sound.createAsync(
+        resolved.source,
+        { shouldPlay: true },
+      );
+      soundRef.current = sound;
+      sound.setOnPlaybackStatusUpdate((status: AVPlaybackStatus) => {
+        if (!status.isLoaded) {
+          if ((status as any).error) setIsAudioPlaying(false);
+          return;
+        }
+        if (status.didJustFinish) {
+          setIsAudioPlaying(false);
+        }
+      });
+    } catch (e) {
+      console.warn('audio play error', e);
+      setIsAudioPlaying(false);
+    }
+  }, []);
+
+  const pickNext = useCallback(() => {
+    const next = getRandomItem();
+    if (!next) return;
+    setCurrentItem(next);
+
+    let displayStr = next.caption || next.primary;
+    animateChange(displayStr);
+
+    // small delay so animation starts before audio
+    setTimeout(() => {
+      playAudioFor(next);
+    }, 350);
+  }, [getRandomItem, animateChange, playAudioFor]);
+
+  // First load
   useEffect(() => {
     pickNext();
     return () => {
-      if (sound) {
-        sound.unloadAsync();
+      if (soundRef.current) {
+        soundRef.current.unloadAsync().catch(() => {});
+        soundRef.current = null;
       }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const animateChange = (newText: string) => {
-    const newWords = newText.split(' ');
-    setWords(newWords);
-
-    wordsAnim.length = 0;
-    newWords.forEach(() => {
-      wordsAnim.push(new Animated.Value(-200));
-    });
-
-    scaleAnim.setValue(0.5);
-    Animated.spring(scaleAnim, {
-      toValue: 1,
-      friction: 4,
-      useNativeDriver: true,
-    }).start();
-
-    const wordAnimations = wordsAnim.map((anim, index) => {
-      return Animated.timing(anim, {
-        toValue: 0,
-        duration: 400,
-        delay: index * 400,
-        easing: Easing.bounce,
-        useNativeDriver: true,
-      });
-    });
-
-    Animated.parallel(wordAnimations).start();
-  };
-
-  const playAudioFor = async (item) => {
-    if (sound) {
-      await sound.unloadAsync();
+  const onCardPress = useCallback(() => {
+    if (isAudioPlaying) {
+      // Visual hint: tiny shake. Do NOT advance.
+      lockShake.setValue(0);
+      Animated.sequence([
+        Animated.timing(lockShake, { toValue: 8, duration: 60, useNativeDriver: true }),
+        Animated.timing(lockShake, { toValue: -8, duration: 60, useNativeDriver: true }),
+        Animated.timing(lockShake, { toValue: 6, duration: 60, useNativeDriver: true }),
+        Animated.timing(lockShake, { toValue: -4, duration: 60, useNativeDriver: true }),
+        Animated.timing(lockShake, { toValue: 0, duration: 60, useNativeDriver: true }),
+      ]).start();
+      return;
     }
-    try {
-      // By default use polish audio if available, else generic audio
-      const audioFileName = item.audio_pl || item.audio || item.audio_en;
-      const audioModule = AudioAssets[audioFileName];
-      if (audioModule) {
-        const { sound: newSound } = await Audio.Sound.createAsync(audioModule);
-        setSound(newSound);
-        await newSound.playAsync();
-      } else {
-        console.warn("Audio module not found in AssetMap for:", audioFileName);
-      }
-    } catch (error) {
-      console.error("Audio play error", error);
-    }
-  };
+    pickNext();
+  }, [isAudioPlaying, pickNext, lockShake]);
 
-  const pickNext = () => {
-    const nextItem = getRandomItem();
-    setCurrentItem(nextItem);
-    
-    let displayStr = "";
-    if (nextItem.id.startsWith("letters_pl")) {
-        displayStr = `${nextItem.letter} jak ${nextItem.word}`;
-    } else if (nextItem.id.startsWith("letters_en")) {
-        displayStr = `${nextItem.letter} is for ${nextItem.word}`;
-    } else if (nextItem.id.startsWith("animals")) {
-        displayStr = `${nextItem.pl} mówi ${nextItem.sound_pl}`;
-    } else {
-        displayStr = nextItem.pl || nextItem.text || nextItem.id;
-    }
-    
-    animateChange(displayStr);
-    setTimeout(() => { playAudioFor(nextItem); }, 600);
-  };
+  if (!currentItem) {
+    return (
+      <View style={[styles.container, { backgroundColor: '#ffdb58' }]}>
+        <Text style={styles.title}>Brak materiałów w tej kategorii.</Text>
+        <TouchableOpacity style={styles.menuBtn} onPress={onBack}>
+          <Text style={styles.menuBtnText}>Wróć</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
-  if (!currentItem) return <View style={styles.container}><Text>Ładowanie...</Text></View>;
+  const isColor = currentItem.category === 'colors';
+  const cardImage = resolveImageSource(currentItem);
+  const containerBg = isColor ? currentItem.hex || '#ffdb58' : '#ffdb58';
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: containerBg }]}>
       <TouchableOpacity style={styles.backBtn} onPress={onBack}>
         <Text style={styles.backBtnText}>↩ Wróć</Text>
       </TouchableOpacity>
 
-      <View style={styles.textContainer}>
+      <View style={styles.textContainer} pointerEvents="none">
         {words.map((word, index) => (
-          <Animated.Text 
-            key={index} 
-            style={[styles.fallingText, { transform: [{ translateY: wordsAnim[index] }] }]}
+          <Animated.Text
+            key={index}
+            style={[
+              styles.fallingText,
+              isColor && { color: '#ffffff', textShadowColor: 'rgba(0,0,0,0.6)' },
+              { transform: [{ translateY: wordsAnim[index] || new Animated.Value(0) }] },
+            ]}
           >
             {word}{' '}
           </Animated.Text>
         ))}
       </View>
 
-      <TouchableOpacity style={styles.touchArea} activeOpacity={0.8} onPress={pickNext}>
-        <Animated.View style={[styles.card, { transform: [{ scale: scaleAnim }] }]}>
-          {ImageAssets[currentItem.filename] ? (
-            <React.Fragment>
-              <Image source={ImageAssets[currentItem.filename]} style={styles.image} resizeMode="contain" />
-              <Text style={styles.debug}>[MP3: {currentItem.filename}]</Text>
-            </React.Fragment>
+      <TouchableOpacity
+        style={styles.touchArea}
+        activeOpacity={0.85}
+        onPress={onCardPress}
+      >
+        <Animated.View
+          style={[
+            styles.card,
+            isColor && { backgroundColor: currentItem.hex || '#fff' },
+            {
+              transform: [
+                { scale: scaleAnim },
+                { translateX: lockShake },
+              ],
+            },
+          ]}
+        >
+          {isColor ? (
+            <Text style={[styles.text, { color: '#ffffff', textShadowColor: 'rgba(0,0,0,0.5)', textShadowRadius: 8 }]}>
+              {currentItem.primary}
+            </Text>
+          ) : cardImage ? (
+            <Image source={cardImage} style={styles.image} resizeMode="contain" />
           ) : (
-            <React.Fragment>
-              {/* Temporary text until images are loaded fully */}
-              <Text style={styles.text}>{currentItem.pl || currentItem.letter || currentItem.id}</Text>
-              <Text style={styles.debug}>[GENEROWANIE GRAFIKI W TLE]</Text>
-            </React.Fragment>
+            <Text style={styles.text}>{currentItem.primary}</Text>
           )}
         </Animated.View>
       </TouchableOpacity>
-    </View>
-  );
-}
 
-// ==========================================
-// EKRAN: MENU DZIECKA (Wybór Kategorii)
-// ==========================================
-function ChildMenu({ onSelect, onBack }) {
-  return (
-    <View style={styles.container}>
-      <TouchableOpacity style={styles.backBtn} onPress={onBack}>
-        <Text style={styles.backBtnText}>↩ Wyjdź (PIN)</Text>
-      </TouchableOpacity>
-      
-      <Text style={styles.title}>Czego się uczymy? 🎈</Text>
-      
-      <View style={styles.gridContainer}>
-        <TouchableOpacity style={[styles.categoryBtn, {backgroundColor: '#FF5722'}]} onPress={() => onSelect('letters')}>
-          <Text style={styles.categoryIcon}>A</Text>
-          <Text style={styles.categoryText}>Literki</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity style={[styles.categoryBtn, {backgroundColor: '#2196F3'}]} onPress={() => onSelect('numbers')}>
-          <Text style={styles.categoryIcon}>1</Text>
-          <Text style={styles.categoryText}>Cyfry</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity style={[styles.categoryBtn, {backgroundColor: '#4CAF50'}]} onPress={() => onSelect('animals')}>
-          <Text style={styles.categoryIcon}>🐾</Text>
-          <Text style={styles.categoryText}>Zwierzęta</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity style={[styles.categoryBtn, {backgroundColor: '#E91E63'}]} onPress={() => onSelect('colors')}>
-          <Text style={styles.categoryIcon}>🎨</Text>
-          <Text style={styles.categoryText}>Kolory</Text>
-        </TouchableOpacity>
+      {/* Audio gating indicator */}
+      <View style={styles.gateBar} pointerEvents="none">
+        {isAudioPlaying ? (
+          <Text style={styles.gateText}>🔊 Słuchaj…</Text>
+        ) : (
+          <Text style={styles.gateTextReady}>👆 Stuknij — kolejny obrazek</Text>
+        )}
       </View>
     </View>
   );
 }
 
+/* ============================================================
+   CHILD MENU — uses MenuAssets (Qwen-generated tiles when present)
+============================================================ */
 
-// ==========================================
-// GŁÓWNA APLIKACJA (Nawigacja)
-// ==========================================
+type ChildMenuProps = {
+  state: PersistedState;
+  onSelect: (cat: CategoryId) => void;
+  onBack: () => void;
+};
+
+const TILE_DEFS: { id: CategoryId; defaultIcon: string; color: string; menuAsset?: string }[] = [
+  { id: 'letters', defaultIcon: 'A',  color: '#FF5722', menuAsset: 'bg_letters.webp' },
+  { id: 'numbers', defaultIcon: '1',  color: '#2196F3', menuAsset: 'bg_numbers.webp' },
+  { id: 'animals', defaultIcon: '🐾', color: '#4CAF50', menuAsset: 'bg_animals.webp' },
+  { id: 'colors',  defaultIcon: '🎨', color: '#E91E63', menuAsset: 'bg_colors.webp' },
+];
+
+function ChildMenu({ state, onSelect, onBack }: ChildMenuProps) {
+  const mainBg = MenuAssets['bg_main.webp'];
+  return (
+    <ImageBackground
+      source={mainBg ?? undefined}
+      style={[styles.container, { backgroundColor: '#ffdb58' }]}
+      resizeMode="cover"
+    >
+      <View style={styles.dimOverlay} />
+      <TouchableOpacity style={styles.backBtn} onPress={onBack}>
+        <Text style={styles.backBtnText}>↩ Wyjdź (PIN)</Text>
+      </TouchableOpacity>
+
+      <Text style={[styles.title, { color: '#fff', textShadowColor: 'rgba(0,0,0,0.5)', textShadowRadius: 8 }]}>
+        Czego się uczymy? 🎈
+      </Text>
+
+      <View style={styles.gridContainer}>
+        {TILE_DEFS.map((t) => {
+          const tileBg = t.menuAsset ? MenuAssets[t.menuAsset] : null;
+          const label = state.categoryLabels[t.id];
+          return (
+            <TouchableOpacity
+              key={t.id}
+              style={[styles.categoryBtn, { backgroundColor: t.color }]}
+              activeOpacity={0.85}
+              onPress={() => onSelect(t.id)}
+            >
+              {tileBg ? (
+                <ImageBackground
+                  source={tileBg}
+                  style={styles.tileBg}
+                  imageStyle={{ borderRadius: 30 }}
+                  resizeMode="cover"
+                >
+                  <View style={styles.tileScrim} />
+                  <Text style={[styles.categoryIcon, styles.tileText]}>{t.defaultIcon}</Text>
+                  <Text style={[styles.categoryText, styles.tileText]}>{label}</Text>
+                </ImageBackground>
+              ) : (
+                <View style={styles.tileBg}>
+                  <Text style={styles.categoryIcon}>{t.defaultIcon}</Text>
+                  <Text style={styles.categoryText}>{label}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+    </ImageBackground>
+  );
+}
+
+/* ============================================================
+   ROOT — navigation + PIN gate + state bootstrapping
+============================================================ */
+
 export default function App() {
-  const [screen, setScreen] = useState('menu');
-  const [selectedCategory, setSelectedCategory] = useState('animals');
-  
-  // PIN system state
+  const [screen, setScreen] = useState<'menu' | 'child_menu' | 'flashcard' | 'parent'>('menu');
+  const [selectedCategory, setSelectedCategory] = useState<CategoryId>('animals');
+
+  const [state, setState] = useState<PersistedState | null>(null);
+
   const [showPinDialog, setShowPinDialog] = useState(false);
   const [pinInput, setPinInput] = useState('');
-  const CORRECT_PIN = '1234'; // Hardcoded for now
-  const [targetScreenAfterPin, setTargetScreenAfterPin] = useState('menu');
+  const [targetScreenAfterPin, setTargetScreenAfterPin] =
+    useState<'menu' | 'parent'>('menu');
 
+  // Bootstrap state + landscape lock
   useEffect(() => {
-    async function lockOrientation() {
-      await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE);
+    (async () => {
+      try {
+        await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE);
+      } catch {}
+      try {
+        await Audio.setAudioModeAsync({
+          allowsRecordingIOS: true,
+          playsInSilentModeIOS: true,
+          staysActiveInBackground: false,
+          shouldDuckAndroid: true,
+        } as any);
+      } catch {}
+      try {
+        await ensureDirs();
+      } catch {}
+      const s = await loadState();
+      setState(s);
+    })();
+  }, []);
+
+  const persist = useCallback(async (next: PersistedState) => {
+    setState(next);
+    try {
+      await saveState(next);
+    } catch (e) {
+      console.warn('saveState', e);
     }
-    lockOrientation();
   }, []);
 
   const handleEnterChildMode = () => {
-    if (KioskModule && KioskModule.enableKioskMode) {
-      KioskModule.enableKioskMode();
+    if (state?.kioskEnabled && KioskModule?.enableKioskMode) {
+      try {
+        const r = KioskModule.enableKioskMode();
+        if (r && typeof r.then === 'function') {
+          r.catch((e: any) => console.warn('kiosk enable failed', e));
+        }
+      } catch (e) {
+        console.warn('kiosk enable threw', e);
+      }
     }
     setScreen('child_menu');
   };
 
   const handleExitChildModeRequest = () => {
-    // Show PIN dialog instead of directly exiting
     setTargetScreenAfterPin('menu');
     setPinInput('');
     setShowPinDialog(true);
-  };
-
-  const verifyPinAndProceed = () => {
-    if (pinInput === CORRECT_PIN) {
-      setShowPinDialog(false);
-      setPinInput('');
-      
-      // If we are exiting child mode, disable kiosk mode
-      if (KioskModule && KioskModule.disableKioskMode) {
-        KioskModule.disableKioskMode();
-      }
-      setScreen(targetScreenAfterPin);
-    } else {
-      Alert.alert('Błędny PIN', 'Spróbuj ponownie.');
-      setPinInput('');
-    }
   };
 
   const handleParentModeRequest = () => {
@@ -245,27 +415,63 @@ export default function App() {
     setShowPinDialog(true);
   };
 
+  const verifyPinAndProceed = () => {
+    if (!state) return;
+    if (pinInput === state.pin) {
+      setShowPinDialog(false);
+      setPinInput('');
+      // Always lift kiosk before showing the parent panel or going back
+      // to the main menu, so the parent regains the system controls.
+      if (KioskModule?.disableKioskMode) {
+        try {
+          const r = KioskModule.disableKioskMode();
+          if (r && typeof r.then === 'function') {
+            r.catch(() => {});
+          }
+        } catch {}
+      }
+      setScreen(targetScreenAfterPin);
+    } else {
+      Alert.alert('Błędny PIN', 'Spróbuj ponownie.');
+      setPinInput('');
+    }
+  };
+
+  if (!state) {
+    return (
+      <View style={[styles.container, { backgroundColor: '#ffdb58' }]}>
+        <Text style={styles.title}>Wczytuję…</Text>
+      </View>
+    );
+  }
+
   if (showPinDialog) {
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, { backgroundColor: '#ffdb58' }]}>
         <View style={styles.pinDialog}>
           <Text style={styles.pinTitle}>Wpisz kod PIN rodzica</Text>
           <Text style={styles.pinSubtitle}>(Domyślny: 1234)</Text>
-          <TextInput 
+          <TextInput
             style={styles.pinInput}
             keyboardType="number-pad"
             secureTextEntry
-            maxLength={4}
+            maxLength={6}
             value={pinInput}
             onChangeText={setPinInput}
             autoFocus
           />
           <View style={styles.pinActions}>
-            <TouchableOpacity style={[styles.menuBtn, {backgroundColor: '#ccc', minWidth: 120, paddingVertical: 10}]} onPress={() => setShowPinDialog(false)}>
-              <Text style={[styles.menuBtnText, {color: '#333', fontSize: 20}]}>Anuluj</Text>
+            <TouchableOpacity
+              style={[styles.menuBtn, { backgroundColor: '#ccc', minWidth: 120, paddingVertical: 10 }]}
+              onPress={() => setShowPinDialog(false)}
+            >
+              <Text style={[styles.menuBtnText, { color: '#333', fontSize: 20 }]}>Anuluj</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.menuBtn, {backgroundColor: '#4CAF50', minWidth: 120, paddingVertical: 10}]} onPress={verifyPinAndProceed}>
-              <Text style={[styles.menuBtnText, {fontSize: 20}]}>OK</Text>
+            <TouchableOpacity
+              style={[styles.menuBtn, { backgroundColor: '#4CAF50', minWidth: 120, paddingVertical: 10 }]}
+              onPress={verifyPinAndProceed}
+            >
+              <Text style={[styles.menuBtnText, { fontSize: 20 }]}>OK</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -275,58 +481,98 @@ export default function App() {
 
   if (screen === 'child_menu') {
     return (
-      <ChildMenu 
-        onSelect={(cat) => { setSelectedCategory(cat); setScreen('flashcard'); }} 
-        onBack={handleExitChildModeRequest} 
+      <ChildMenu
+        state={state}
+        onSelect={(cat) => {
+          setSelectedCategory(cat);
+          setScreen('flashcard');
+        }}
+        onBack={handleExitChildModeRequest}
       />
     );
   }
 
   if (screen === 'flashcard') {
-    return <FlashcardGame category={selectedCategory} onBack={() => setScreen('child_menu')} />;
+    return (
+      <FlashcardGame
+        category={selectedCategory}
+        state={state}
+        onBack={() => setScreen('child_menu')}
+      />
+    );
   }
 
   if (screen === 'parent') {
     return (
-      <View style={styles.container}>
-        <Text style={styles.title}>Panel Rodzica 👩‍💻</Text>
-        <Text style={styles.subtitle}>Tu w przyszłości będą ustawienia i blokada PIN.</Text>
-        <TouchableOpacity style={styles.menuBtn} onPress={() => setScreen('menu')}>
-          <Text style={styles.menuBtnText}>Wróć do Menu</Text>
-        </TouchableOpacity>
-      </View>
+      <ParentApp
+        state={state}
+        persist={persist}
+        onExit={() => setScreen('menu')}
+      />
     );
   }
 
-  // DOMYŚLNY EKRAN: MENU
+  // DEFAULT: main menu
+  const mainBg = MenuAssets['bg_main.webp'];
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Witaj w Teach Your Kids! 🚀</Text>
-      <Text style={styles.subtitle}>Kto korzysta z tabletu?</Text>
-      
+    <ImageBackground
+      source={mainBg ?? undefined}
+      style={[styles.container, { backgroundColor: '#ffdb58' }]}
+      resizeMode="cover"
+    >
+      <View style={styles.dimOverlay} />
+      <Text style={[styles.title, { color: '#fff', textShadowColor: 'rgba(0,0,0,0.5)', textShadowRadius: 10 }]}>
+        Witaj w Teach Your Kids! 🚀
+      </Text>
+      <Text style={[styles.subtitle, { color: '#fff' }]}>Kto korzysta z tabletu?</Text>
+
       <View style={styles.menuRow}>
-        <TouchableOpacity style={[styles.menuBtn, { backgroundColor: '#4CAF50' }]} onPress={handleEnterChildMode}>
-          <Text style={styles.menuBtnText}>👶 Dziecko</Text>
+        <TouchableOpacity
+          style={[styles.bigMenuBtn, { backgroundColor: '#4CAF50' }]}
+          onPress={handleEnterChildMode}
+          activeOpacity={0.85}
+        >
+          {MenuAssets['icon_child.webp'] ? (
+            <Image source={MenuAssets['icon_child.webp']} style={styles.bigMenuIcon} resizeMode="cover" />
+          ) : (
+            <Text style={styles.bigMenuEmoji}>👶</Text>
+          )}
+          <Text style={styles.menuBtnText}>Dziecko</Text>
         </TouchableOpacity>
-        
-        <TouchableOpacity style={[styles.menuBtn, { backgroundColor: '#2196F3' }]} onPress={handleParentModeRequest}>
-          <Text style={styles.menuBtnText}>👩‍💻 Rodzic</Text>
+
+        <TouchableOpacity
+          style={[styles.bigMenuBtn, { backgroundColor: '#2196F3' }]}
+          onPress={handleParentModeRequest}
+          activeOpacity={0.85}
+        >
+          {MenuAssets['icon_parent.webp'] ? (
+            <Image source={MenuAssets['icon_parent.webp']} style={styles.bigMenuIcon} resizeMode="cover" />
+          ) : (
+            <Text style={styles.bigMenuEmoji}>👩‍💻</Text>
+          )}
+          <Text style={styles.menuBtnText}>Rodzic</Text>
         </TouchableOpacity>
       </View>
-    </View>
+    </ImageBackground>
   );
 }
 
-const styles = StyleSheet.create({
+/* ============================================================
+   STYLES
+============================================================ */
+
+export const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#ffdb58',
     alignItems: 'center',
     justifyContent: 'center',
     width: '100%',
     height: '100%',
   },
-  // PIN Dialog styles
+  dimOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.18)',
+  },
   pinDialog: {
     backgroundColor: 'white',
     padding: 30,
@@ -340,17 +586,8 @@ const styles = StyleSheet.create({
     width: '50%',
     minWidth: 350,
   },
-  pinTitle: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 5,
-  },
-  pinSubtitle: {
-    fontSize: 16,
-    color: '#666',
-    marginBottom: 20,
-  },
+  pinTitle: { fontSize: 28, fontWeight: 'bold', color: '#333', marginBottom: 5 },
+  pinSubtitle: { fontSize: 16, color: '#666', marginBottom: 20 },
   pinInput: {
     fontSize: 40,
     letterSpacing: 20,
@@ -361,32 +598,10 @@ const styles = StyleSheet.create({
     marginBottom: 30,
     paddingVertical: 10,
   },
-  pinActions: {
-    flexDirection: 'row',
-    gap: 20,
-    justifyContent: 'center',
-    width: '100%',
-  },
-  // Menu styles
-  title: {
-    fontSize: 40,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 10,
-    textAlign: 'center',
-  },
-  subtitle: {
-    fontSize: 24,
-    color: '#666',
-    marginBottom: 30,
-    textAlign: 'center',
-  },
-  menuRow: {
-    flexDirection: 'row',
-    gap: 30,
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-  },
+  pinActions: { flexDirection: 'row', gap: 20, justifyContent: 'center', width: '100%' },
+  title: { fontSize: 40, fontWeight: 'bold', color: '#333', marginBottom: 10, textAlign: 'center' },
+  subtitle: { fontSize: 24, color: '#666', marginBottom: 30, textAlign: 'center' },
+  menuRow: { flexDirection: 'row', gap: 30, flexWrap: 'wrap', justifyContent: 'center' },
   menuBtn: {
     paddingVertical: 20,
     paddingHorizontal: 40,
@@ -399,48 +614,71 @@ const styles = StyleSheet.create({
     minWidth: 200,
     alignItems: 'center',
   },
-  menuBtnText: {
-    fontSize: 28,
-    color: 'white',
-    fontWeight: 'bold',
+  menuBtnText: { fontSize: 28, color: 'white', fontWeight: 'bold' },
+  bigMenuBtn: {
+    paddingTop: 16,
+    paddingBottom: 16,
+    paddingHorizontal: 28,
+    borderRadius: 24,
+    elevation: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+    minWidth: 220,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  // Child Categories Grid
+  bigMenuIcon: {
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    marginBottom: 10,
+    borderWidth: 3,
+    borderColor: 'rgba(255,255,255,0.85)',
+  },
+  bigMenuEmoji: { fontSize: 80, marginBottom: 8 },
   gridContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    width: '80%',
-    maxWidth: 800,
+    width: '90%',
+    maxWidth: 900,
     justifyContent: 'center',
     gap: 20,
   },
   categoryBtn: {
     width: '40%',
     aspectRatio: 1.5,
-    minWidth: 200,
+    minWidth: 220,
     borderRadius: 30,
-    alignItems: 'center',
-    justifyContent: 'center',
     elevation: 6,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 5 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
+    overflow: 'hidden',
   },
-  categoryIcon: {
-    fontSize: 60,
-    fontWeight: 'bold',
-    color: 'white',
-    marginBottom: 10,
+  tileBg: {
+    width: '100%',
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  categoryText: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: 'white',
+  tileScrim: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.25)',
+    borderRadius: 30,
   },
-  // Flashcard styles
+  tileText: {
+    textShadowColor: 'rgba(0,0,0,0.6)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 6,
+  },
+  categoryIcon: { fontSize: 60, fontWeight: 'bold', color: 'white', marginBottom: 10 },
+  categoryText: { fontSize: 28, fontWeight: 'bold', color: 'white' },
   textContainer: {
     position: 'absolute',
-    top: '10%',
+    top: '8%',
     flexDirection: 'row',
     zIndex: 10,
     flexWrap: 'wrap',
@@ -469,7 +707,7 @@ const styles = StyleSheet.create({
     width: '70%',
     height: '60%',
     maxWidth: 600,
-    maxHeight: 400,
+    maxHeight: 420,
     backgroundColor: '#fff',
     borderRadius: 40,
     alignItems: 'center',
@@ -481,35 +719,43 @@ const styles = StyleSheet.create({
     elevation: 10,
     padding: 20,
   },
-  text: {
-    fontSize: 50,
-    fontWeight: 'bold',
-    color: '#333',
-    textAlign: 'center',
-  },
-  image: {
-    width: '90%',
-    height: '90%',
-    borderRadius: 20,
-  },
-  debug: {
-    fontSize: 16,
-    color: '#aaa',
-    position: 'absolute',
-    bottom: 20,
-  },
+  text: { fontSize: 56, fontWeight: 'bold', color: '#333', textAlign: 'center' },
+  image: { width: '90%', height: '90%', borderRadius: 20 },
   backBtn: {
     position: 'absolute',
     top: 20,
     left: 20,
-    backgroundColor: 'rgba(255,255,255,0.7)',
+    backgroundColor: 'rgba(255,255,255,0.85)',
     padding: 15,
     borderRadius: 15,
     zIndex: 20,
   },
-  backBtnText: {
+  backBtnText: { fontSize: 20, fontWeight: 'bold', color: '#333' },
+  gateBar: {
+    position: 'absolute',
+    bottom: 16,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+  },
+  gateText: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#333',
-  }
+    color: '#fff',
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  gateTextReady: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#fff',
+    backgroundColor: 'rgba(76,175,80,0.85)',
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
 });
