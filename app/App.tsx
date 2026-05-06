@@ -10,11 +10,11 @@ import {
   NativeModules,
   TextInput,
   Alert,
-  StatusBar as RNStatusBar,
   ImageBackground,
+  useWindowDimensions,
+  BackHandler,
 } from 'react-native';
 import { Audio, AVPlaybackStatus } from 'expo-av';
-import * as ScreenOrientation from 'expo-screen-orientation';
 
 import { AudioAssets, ImageAssets, MenuAssets } from './AssetMap';
 import {
@@ -31,8 +31,25 @@ import { ParentApp } from './ParentApp';
 const { KioskModule } = NativeModules;
 
 /* ============================================================
-   Audio gating helper — resolves a MergedItem to a playable
-   source and returns a promise that resolves when playback ends.
+   Responsive hook — use inside any component that needs to adapt
+   to screen size or rotation.
+============================================================ */
+
+export function useDevice() {
+  const { width, height } = useWindowDimensions();
+  const isLandscape = width > height;
+  const short = Math.min(width, height);
+  // Scale relative to 360dp short side; cap at 1.6 so tablet UI stays sane
+  const scale = Math.min(short / 360, 1.6);
+  const rs = (base: number, maxVal?: number) => {
+    const v = Math.round(base * scale);
+    return maxVal !== undefined ? Math.min(v, maxVal) : v;
+  };
+  return { width, height, isLandscape, short, scale, rs };
+}
+
+/* ============================================================
+   Audio + image resolution helpers
 ============================================================ */
 
 function resolveAudioSource(item: MergedItem): { source: any; key: string } | null {
@@ -50,12 +67,11 @@ function resolveImageSource(item: MergedItem): any {
   if (item.imageSource.__builtinImage) {
     return ImageAssets[item.imageSource.__builtinImage] ?? null;
   }
-  return item.imageSource; // { uri: 'file://...' } for custom
+  return item.imageSource;
 }
 
 /* ============================================================
-   FLASHCARD — child mode. Audio gating: tap to advance is disabled
-   until current sound has finished playing.
+   FLASHCARD — child mode
 ============================================================ */
 
 type FlashcardProps = {
@@ -65,6 +81,8 @@ type FlashcardProps = {
 };
 
 function FlashcardGame({ category, state, onBack }: FlashcardProps) {
+  const { width, height, isLandscape, rs } = useDevice();
+
   const items = useMemo(
     () => buildItemsForCategory(category, state, 'pl'),
     [category, state],
@@ -80,7 +98,16 @@ function FlashcardGame({ category, state, onBack }: FlashcardProps) {
   const lockShake = useRef(new Animated.Value(0)).current;
   const [words, setWords] = useState<string[]>([]);
 
-  // Pick a different item than previous one if possible
+  // Card dimensions adapt to orientation
+  const cardW = isLandscape
+    ? Math.min(width * 0.56, 560)
+    : Math.min(width * 0.86, 460);
+  const cardH = isLandscape
+    ? Math.min(height * 0.64, 400)
+    : Math.min(height * 0.46, 380);
+  const fallingFontSize = rs(34, 46);
+  const cardTextSize = rs(40, 54);
+
   const getRandomItem = useCallback((): MergedItem | null => {
     if (items.length === 0) return null;
     if (items.length === 1) return items[0];
@@ -94,13 +121,10 @@ function FlashcardGame({ category, state, onBack }: FlashcardProps) {
     (newText: string) => {
       const newWords = newText.split(' ');
       setWords(newWords);
-
       wordsAnim.length = 0;
       newWords.forEach(() => wordsAnim.push(new Animated.Value(-200)));
-
       scaleAnim.setValue(0.5);
       Animated.spring(scaleAnim, { toValue: 1, friction: 4, useNativeDriver: true }).start();
-
       Animated.parallel(
         wordsAnim.map((anim, i) =>
           Animated.timing(anim, {
@@ -117,36 +141,22 @@ function FlashcardGame({ category, state, onBack }: FlashcardProps) {
   );
 
   const playAudioFor = useCallback(async (item: MergedItem) => {
-    // Always unload any previous sound
     if (soundRef.current) {
-      try {
-        await soundRef.current.unloadAsync();
-      } catch {}
+      try { await soundRef.current.unloadAsync(); } catch {}
       soundRef.current = null;
     }
-
     const resolved = resolveAudioSource(item);
-    if (!resolved) {
-      // No audio at all → nothing to wait for; flag as "ready immediately"
-      setIsAudioPlaying(false);
-      return;
-    }
-
+    if (!resolved) { setIsAudioPlaying(false); return; }
     setIsAudioPlaying(true);
     try {
-      const { sound } = await Audio.Sound.createAsync(
-        resolved.source,
-        { shouldPlay: true },
-      );
+      const { sound } = await Audio.Sound.createAsync(resolved.source, { shouldPlay: true });
       soundRef.current = sound;
       sound.setOnPlaybackStatusUpdate((status: AVPlaybackStatus) => {
         if (!status.isLoaded) {
           if ((status as any).error) setIsAudioPlaying(false);
           return;
         }
-        if (status.didJustFinish) {
-          setIsAudioPlaying(false);
-        }
+        if (status.didJustFinish) setIsAudioPlaying(false);
       });
     } catch (e) {
       console.warn('audio play error', e);
@@ -158,31 +168,20 @@ function FlashcardGame({ category, state, onBack }: FlashcardProps) {
     const next = getRandomItem();
     if (!next) return;
     setCurrentItem(next);
-
-    let displayStr = next.caption || next.primary;
-    animateChange(displayStr);
-
-    // small delay so animation starts before audio
-    setTimeout(() => {
-      playAudioFor(next);
-    }, 350);
+    animateChange(next.caption || next.primary);
+    setTimeout(() => playAudioFor(next), 350);
   }, [getRandomItem, animateChange, playAudioFor]);
 
-  // First load
   useEffect(() => {
     pickNext();
     return () => {
-      if (soundRef.current) {
-        soundRef.current.unloadAsync().catch(() => {});
-        soundRef.current = null;
-      }
+      if (soundRef.current) { soundRef.current.unloadAsync().catch(() => {}); soundRef.current = null; }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const onCardPress = useCallback(() => {
     if (isAudioPlaying) {
-      // Visual hint: tiny shake. Do NOT advance.
       lockShake.setValue(0);
       Animated.sequence([
         Animated.timing(lockShake, { toValue: 8, duration: 60, useNativeDriver: true }),
@@ -223,6 +222,7 @@ function FlashcardGame({ category, state, onBack }: FlashcardProps) {
             key={index}
             style={[
               styles.fallingText,
+              { fontSize: fallingFontSize },
               isColor && { color: '#ffffff', textShadowColor: 'rgba(0,0,0,0.6)' },
               { transform: [{ translateY: wordsAnim[index] || new Animated.Value(0) }] },
             ]}
@@ -240,28 +240,23 @@ function FlashcardGame({ category, state, onBack }: FlashcardProps) {
         <Animated.View
           style={[
             styles.card,
+            { width: cardW, height: cardH },
             isColor && { backgroundColor: currentItem.hex || '#fff' },
-            {
-              transform: [
-                { scale: scaleAnim },
-                { translateX: lockShake },
-              ],
-            },
+            { transform: [{ scale: scaleAnim }, { translateX: lockShake }] },
           ]}
         >
           {isColor ? (
-            <Text style={[styles.text, { color: '#ffffff', textShadowColor: 'rgba(0,0,0,0.5)', textShadowRadius: 8 }]}>
+            <Text style={[styles.text, { fontSize: cardTextSize, color: '#ffffff', textShadowColor: 'rgba(0,0,0,0.5)', textShadowRadius: 8 }]}>
               {currentItem.primary}
             </Text>
           ) : cardImage ? (
             <Image source={cardImage} style={styles.image} resizeMode="contain" />
           ) : (
-            <Text style={styles.text}>{currentItem.primary}</Text>
+            <Text style={[styles.text, { fontSize: cardTextSize }]}>{currentItem.primary}</Text>
           )}
         </Animated.View>
       </TouchableOpacity>
 
-      {/* Audio gating indicator */}
       <View style={styles.gateBar} pointerEvents="none">
         {isAudioPlaying ? (
           <Text style={styles.gateText}>🔊 Słuchaj…</Text>
@@ -274,7 +269,7 @@ function FlashcardGame({ category, state, onBack }: FlashcardProps) {
 }
 
 /* ============================================================
-   CHILD MENU — uses MenuAssets (Qwen-generated tiles when present)
+   CHILD MENU — category selection
 ============================================================ */
 
 type ChildMenuProps = {
@@ -291,7 +286,19 @@ const TILE_DEFS: { id: CategoryId; defaultIcon: string; color: string; menuAsset
 ];
 
 function ChildMenu({ state, onSelect, onBack }: ChildMenuProps) {
+  const { width, height, isLandscape, rs } = useDevice();
   const mainBg = MenuAssets['bg_main.webp'];
+
+  // Tiles: 2 per row always; size adapts to orientation
+  const tileW = isLandscape
+    ? Math.min(width * 0.40, 380)
+    : Math.min(width * 0.43, 340);
+  const tileAspect = isLandscape ? 1.65 : 1.25;
+  const tileH = tileW / tileAspect;
+  const iconSize = rs(42, 54);
+  const catTextSize = rs(18, 26);
+  const titleSize = rs(20, 26);
+
   return (
     <ImageBackground
       source={mainBg ?? undefined}
@@ -303,18 +310,18 @@ function ChildMenu({ state, onSelect, onBack }: ChildMenuProps) {
         <Text style={styles.backBtnText}>↩ Wyjdź (PIN)</Text>
       </TouchableOpacity>
 
-      <Text style={[styles.title, { color: '#fff', textShadowColor: 'rgba(0,0,0,0.5)', textShadowRadius: 8 }]}>
+      <Text style={[styles.title, { fontSize: titleSize, color: '#fff', textShadowColor: 'rgba(0,0,0,0.5)', textShadowRadius: 8, marginBottom: 8 }]}>
         Czego się uczymy? 🎈
       </Text>
 
-      <View style={styles.gridContainer}>
+      <View style={[styles.gridContainer, { gap: isLandscape ? 16 : 12 }]}>
         {TILE_DEFS.map((t) => {
           const tileBg = t.menuAsset ? MenuAssets[t.menuAsset] : null;
           const label = state.categoryLabels[t.id];
           return (
             <TouchableOpacity
               key={t.id}
-              style={[styles.categoryBtn, { backgroundColor: t.color }]}
+              style={[styles.categoryBtn, { backgroundColor: t.color, width: tileW, height: tileH }]}
               activeOpacity={0.85}
               onPress={() => onSelect(t.id)}
             >
@@ -322,17 +329,17 @@ function ChildMenu({ state, onSelect, onBack }: ChildMenuProps) {
                 <ImageBackground
                   source={tileBg}
                   style={styles.tileBg}
-                  imageStyle={{ borderRadius: 30 }}
+                  imageStyle={{ borderRadius: 24 }}
                   resizeMode="cover"
                 >
                   <View style={styles.tileScrim} />
-                  <Text style={[styles.categoryIcon, styles.tileText]}>{t.defaultIcon}</Text>
-                  <Text style={[styles.categoryText, styles.tileText]}>{label}</Text>
+                  <Text style={[styles.categoryIcon, styles.tileText, { fontSize: iconSize }]}>{t.defaultIcon}</Text>
+                  <Text style={[styles.categoryText, styles.tileText, { fontSize: catTextSize }]}>{label}</Text>
                 </ImageBackground>
               ) : (
                 <View style={styles.tileBg}>
-                  <Text style={styles.categoryIcon}>{t.defaultIcon}</Text>
-                  <Text style={styles.categoryText}>{label}</Text>
+                  <Text style={[styles.categoryIcon, { fontSize: iconSize }]}>{t.defaultIcon}</Text>
+                  <Text style={[styles.categoryText, { fontSize: catTextSize }]}>{label}</Text>
                 </View>
               )}
             </TouchableOpacity>
@@ -348,22 +355,18 @@ function ChildMenu({ state, onSelect, onBack }: ChildMenuProps) {
 ============================================================ */
 
 export default function App() {
+  const { width, height, isLandscape, rs } = useDevice();
+
   const [screen, setScreen] = useState<'menu' | 'child_menu' | 'flashcard' | 'parent'>('menu');
   const [selectedCategory, setSelectedCategory] = useState<CategoryId>('animals');
-
   const [state, setState] = useState<PersistedState | null>(null);
-
   const [showPinDialog, setShowPinDialog] = useState(false);
   const [pinInput, setPinInput] = useState('');
   const [targetScreenAfterPin, setTargetScreenAfterPin] =
     useState<'menu' | 'parent'>('menu');
 
-  // Bootstrap state + landscape lock
   useEffect(() => {
     (async () => {
-      try {
-        await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE);
-      } catch {}
       try {
         await Audio.setAudioModeAsync({
           allowsRecordingIOS: true,
@@ -372,33 +375,48 @@ export default function App() {
           shouldDuckAndroid: true,
         } as any);
       } catch {}
-      try {
-        await ensureDirs();
-      } catch {}
+      try { await ensureDirs(); } catch {}
       const s = await loadState();
       setState(s);
     })();
   }, []);
 
+  // Hardware back button: block in child screens, intercept exit elsewhere.
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (showPinDialog) { setShowPinDialog(false); setPinInput(''); return true; }
+      if (screen === 'child_menu') { handleExitChildModeRequest(); return true; }
+      if (screen === 'flashcard') { setScreen('child_menu'); return true; }
+      if (screen === 'parent') { setScreen('menu'); return true; }
+      return false; // root menu → allow normal back
+    });
+    return () => sub.remove();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [screen, showPinDialog]);
+
+  // Kiosk auto-apply: locked everywhere except the parent panel.
+  // No-op when state.kioskEnabled is false. Calling enableKioskMode while
+  // already pinned is idempotent at the OS level.
+  useEffect(() => {
+    if (!state?.kioskEnabled || !KioskModule?.enableKioskMode) return;
+    if (screen === 'parent' || showPinDialog) return;
+    try {
+      const r = KioskModule.enableKioskMode();
+      if (r && typeof r.then === 'function') r.catch(() => {});
+    } catch {}
+  }, [state?.kioskEnabled, screen, showPinDialog]);
+
   const persist = useCallback(async (next: PersistedState) => {
     setState(next);
-    try {
-      await saveState(next);
-    } catch (e) {
-      console.warn('saveState', e);
-    }
+    try { await saveState(next); } catch (e) { console.warn('saveState', e); }
   }, []);
 
   const handleEnterChildMode = () => {
     if (state?.kioskEnabled && KioskModule?.enableKioskMode) {
       try {
         const r = KioskModule.enableKioskMode();
-        if (r && typeof r.then === 'function') {
-          r.catch((e: any) => console.warn('kiosk enable failed', e));
-        }
-      } catch (e) {
-        console.warn('kiosk enable threw', e);
-      }
+        if (r && typeof r.then === 'function') r.catch((e: any) => console.warn('kiosk enable failed', e));
+      } catch (e) { console.warn('kiosk enable threw', e); }
     }
     setScreen('child_menu');
   };
@@ -420,14 +438,10 @@ export default function App() {
     if (pinInput === state.pin) {
       setShowPinDialog(false);
       setPinInput('');
-      // Always lift kiosk before showing the parent panel or going back
-      // to the main menu, so the parent regains the system controls.
       if (KioskModule?.disableKioskMode) {
         try {
           const r = KioskModule.disableKioskMode();
-          if (r && typeof r.then === 'function') {
-            r.catch(() => {});
-          }
+          if (r && typeof r.then === 'function') r.catch(() => {});
         } catch {}
       }
       setScreen(targetScreenAfterPin);
@@ -446,13 +460,14 @@ export default function App() {
   }
 
   if (showPinDialog) {
+    const dlgW = Math.min(width * 0.7, 420);
     return (
       <View style={[styles.container, { backgroundColor: '#ffdb58' }]}>
-        <View style={styles.pinDialog}>
-          <Text style={styles.pinTitle}>Wpisz kod PIN rodzica</Text>
+        <View style={[styles.pinDialog, { width: dlgW }]}>
+          <Text style={[styles.pinTitle, { fontSize: rs(22, 28) }]}>Wpisz kod PIN rodzica</Text>
           <Text style={styles.pinSubtitle}>(Domyślny: 1234)</Text>
           <TextInput
-            style={styles.pinInput}
+            style={[styles.pinInput, { fontSize: rs(32, 40) }]}
             keyboardType="number-pad"
             secureTextEntry
             maxLength={6}
@@ -462,16 +477,16 @@ export default function App() {
           />
           <View style={styles.pinActions}>
             <TouchableOpacity
-              style={[styles.menuBtn, { backgroundColor: '#ccc', minWidth: 120, paddingVertical: 10 }]}
+              style={[styles.menuBtn, { backgroundColor: '#ccc', minWidth: 100, paddingVertical: 8 }]}
               onPress={() => setShowPinDialog(false)}
             >
-              <Text style={[styles.menuBtnText, { color: '#333', fontSize: 20 }]}>Anuluj</Text>
+              <Text style={[styles.menuBtnText, { color: '#333', fontSize: rs(16, 20) }]}>Anuluj</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.menuBtn, { backgroundColor: '#4CAF50', minWidth: 120, paddingVertical: 10 }]}
+              style={[styles.menuBtn, { backgroundColor: '#4CAF50', minWidth: 100, paddingVertical: 8 }]}
               onPress={verifyPinAndProceed}
             >
-              <Text style={[styles.menuBtnText, { fontSize: 20 }]}>OK</Text>
+              <Text style={[styles.menuBtnText, { fontSize: rs(16, 20) }]}>OK</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -483,10 +498,7 @@ export default function App() {
     return (
       <ChildMenu
         state={state}
-        onSelect={(cat) => {
-          setSelectedCategory(cat);
-          setScreen('flashcard');
-        }}
+        onSelect={(cat) => { setSelectedCategory(cat); setScreen('flashcard'); }}
         onBack={handleExitChildModeRequest}
       />
     );
@@ -503,17 +515,17 @@ export default function App() {
   }
 
   if (screen === 'parent') {
-    return (
-      <ParentApp
-        state={state}
-        persist={persist}
-        onExit={() => setScreen('menu')}
-      />
-    );
+    return <ParentApp state={state} persist={persist} onExit={() => setScreen('menu')} />;
   }
 
-  // DEFAULT: main menu
+  // MAIN MENU
   const mainBg = MenuAssets['bg_main.webp'];
+  const iconSize = rs(100, 130);
+  const menuTitleSize = rs(24, 36);
+  const menuSubSize = rs(14, 20);
+  const btnTextSize = rs(18, 24);
+  const menuDirection = isLandscape ? 'row' : 'column';
+
   return (
     <ImageBackground
       source={mainBg ?? undefined}
@@ -521,23 +533,29 @@ export default function App() {
       resizeMode="cover"
     >
       <View style={styles.dimOverlay} />
-      <Text style={[styles.title, { color: '#fff', textShadowColor: 'rgba(0,0,0,0.5)', textShadowRadius: 10 }]}>
+      <Text style={[styles.title, { fontSize: menuTitleSize, color: '#fff', textShadowColor: 'rgba(0,0,0,0.5)', textShadowRadius: 10 }]}>
         Witaj w Teach Your Kids! 🚀
       </Text>
-      <Text style={[styles.subtitle, { color: '#fff' }]}>Kto korzysta z tabletu?</Text>
+      <Text style={[styles.subtitle, { fontSize: menuSubSize, color: '#fff', marginBottom: isLandscape ? 16 : 24 }]}>
+        Kto korzysta z tabletu?
+      </Text>
 
-      <View style={styles.menuRow}>
+      <View style={[styles.menuRow, { flexDirection: menuDirection, gap: isLandscape ? 28 : 20 }]}>
         <TouchableOpacity
           style={[styles.bigMenuBtn, { backgroundColor: '#4CAF50' }]}
           onPress={handleEnterChildMode}
           activeOpacity={0.85}
         >
           {MenuAssets['icon_child.webp'] ? (
-            <Image source={MenuAssets['icon_child.webp']} style={styles.bigMenuIcon} resizeMode="cover" />
+            <Image
+              source={MenuAssets['icon_child.webp']}
+              style={[styles.bigMenuIcon, { width: iconSize, height: iconSize, borderRadius: iconSize / 2 }]}
+              resizeMode="cover"
+            />
           ) : (
-            <Text style={styles.bigMenuEmoji}>👶</Text>
+            <Text style={[styles.bigMenuEmoji, { fontSize: rs(60, 80) }]}>👶</Text>
           )}
-          <Text style={styles.menuBtnText}>Dziecko</Text>
+          <Text style={[styles.menuBtnText, { fontSize: btnTextSize }]}>Dziecko</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -546,11 +564,15 @@ export default function App() {
           activeOpacity={0.85}
         >
           {MenuAssets['icon_parent.webp'] ? (
-            <Image source={MenuAssets['icon_parent.webp']} style={styles.bigMenuIcon} resizeMode="cover" />
+            <Image
+              source={MenuAssets['icon_parent.webp']}
+              style={[styles.bigMenuIcon, { width: iconSize, height: iconSize, borderRadius: iconSize / 2 }]}
+              resizeMode="cover"
+            />
           ) : (
-            <Text style={styles.bigMenuEmoji}>👩‍💻</Text>
+            <Text style={[styles.bigMenuEmoji, { fontSize: rs(60, 80) }]}>👩‍💻</Text>
           )}
-          <Text style={styles.menuBtnText}>Rodzic</Text>
+          <Text style={[styles.menuBtnText, { fontSize: btnTextSize }]}>Rodzic</Text>
         </TouchableOpacity>
       </View>
     </ImageBackground>
@@ -575,7 +597,7 @@ export const styles = StyleSheet.create({
   },
   pinDialog: {
     backgroundColor: 'white',
-    padding: 30,
+    padding: 24,
     borderRadius: 20,
     alignItems: 'center',
     elevation: 10,
@@ -583,74 +605,69 @@ export const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 5 },
     shadowOpacity: 0.3,
     shadowRadius: 10,
-    width: '50%',
-    minWidth: 350,
+    minWidth: 280,
   },
-  pinTitle: { fontSize: 28, fontWeight: 'bold', color: '#333', marginBottom: 5 },
-  pinSubtitle: { fontSize: 16, color: '#666', marginBottom: 20 },
+  pinTitle: { fontSize: 22, fontWeight: 'bold', color: '#333', marginBottom: 4 },
+  pinSubtitle: { fontSize: 14, color: '#666', marginBottom: 16 },
   pinInput: {
-    fontSize: 40,
-    letterSpacing: 20,
+    fontSize: 36,
+    letterSpacing: 16,
     textAlign: 'center',
     borderBottomWidth: 2,
     borderBottomColor: '#333',
     width: '80%',
-    marginBottom: 30,
-    paddingVertical: 10,
+    marginBottom: 24,
+    paddingVertical: 8,
   },
-  pinActions: { flexDirection: 'row', gap: 20, justifyContent: 'center', width: '100%' },
-  title: { fontSize: 40, fontWeight: 'bold', color: '#333', marginBottom: 10, textAlign: 'center' },
-  subtitle: { fontSize: 24, color: '#666', marginBottom: 30, textAlign: 'center' },
-  menuRow: { flexDirection: 'row', gap: 30, flexWrap: 'wrap', justifyContent: 'center' },
+  pinActions: { flexDirection: 'row', gap: 16, justifyContent: 'center', width: '100%' },
+  title: { fontSize: 22, fontWeight: 'bold', color: '#333', marginBottom: 6, textAlign: 'center' },
+  subtitle: { fontSize: 15, color: '#666', marginBottom: 20, textAlign: 'center' },
+  menuRow: { flexDirection: 'row', gap: 24, flexWrap: 'wrap', justifyContent: 'center' },
   menuBtn: {
-    paddingVertical: 20,
-    paddingHorizontal: 40,
-    borderRadius: 20,
+    paddingVertical: 14,
+    paddingHorizontal: 28,
+    borderRadius: 18,
     elevation: 5,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 5,
-    minWidth: 200,
+    minWidth: 140,
     alignItems: 'center',
   },
-  menuBtnText: { fontSize: 28, color: 'white', fontWeight: 'bold' },
+  menuBtnText: { fontSize: 20, color: 'white', fontWeight: 'bold' },
   bigMenuBtn: {
-    paddingTop: 16,
-    paddingBottom: 16,
-    paddingHorizontal: 28,
-    borderRadius: 24,
+    paddingVertical: 14,
+    paddingHorizontal: 22,
+    borderRadius: 22,
     elevation: 6,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 5 },
     shadowOpacity: 0.35,
     shadowRadius: 8,
-    minWidth: 220,
+    minWidth: 160,
     alignItems: 'center',
     justifyContent: 'center',
   },
   bigMenuIcon: {
-    width: 140,
-    height: 140,
-    borderRadius: 70,
-    marginBottom: 10,
+    width: 110,
+    height: 110,
+    borderRadius: 55,
+    marginBottom: 8,
     borderWidth: 3,
     borderColor: 'rgba(255,255,255,0.85)',
   },
-  bigMenuEmoji: { fontSize: 80, marginBottom: 8 },
+  bigMenuEmoji: { fontSize: 64, marginBottom: 6 },
   gridContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    width: '90%',
+    width: '92%',
     maxWidth: 900,
     justifyContent: 'center',
-    gap: 20,
+    gap: 14,
   },
   categoryBtn: {
-    width: '40%',
-    aspectRatio: 1.5,
-    minWidth: 220,
-    borderRadius: 30,
+    borderRadius: 24,
     elevation: 6,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 5 },
@@ -666,50 +683,45 @@ export const styles = StyleSheet.create({
   },
   tileScrim: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.25)',
-    borderRadius: 30,
+    backgroundColor: 'rgba(0,0,0,0.22)',
+    borderRadius: 24,
   },
   tileText: {
     textShadowColor: 'rgba(0,0,0,0.6)',
     textShadowOffset: { width: 1, height: 1 },
     textShadowRadius: 6,
   },
-  categoryIcon: { fontSize: 60, fontWeight: 'bold', color: 'white', marginBottom: 10 },
-  categoryText: { fontSize: 28, fontWeight: 'bold', color: 'white' },
+  categoryIcon: { fontSize: 46, fontWeight: 'bold', color: 'white', marginBottom: 6 },
+  categoryText: { fontSize: 20, fontWeight: 'bold', color: 'white' },
   textContainer: {
     position: 'absolute',
-    top: '8%',
+    top: '7%',
     flexDirection: 'row',
     zIndex: 10,
     flexWrap: 'wrap',
     justifyContent: 'center',
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     width: '100%',
   },
   fallingText: {
-    fontSize: 48,
+    fontSize: 36,
     fontWeight: 'bold',
     color: '#FF5733',
     textShadowColor: 'rgba(0, 0, 0, 0.2)',
     textShadowOffset: { width: 2, height: 2 },
     textShadowRadius: 5,
-    marginHorizontal: 5,
+    marginHorizontal: 4,
   },
   touchArea: {
     flex: 1,
     width: '100%',
-    height: '100%',
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: '5%',
+    marginTop: '4%',
   },
   card: {
-    width: '70%',
-    height: '60%',
-    maxWidth: 600,
-    maxHeight: 420,
     backgroundColor: '#fff',
-    borderRadius: 40,
+    borderRadius: 32,
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
@@ -717,45 +729,46 @@ export const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 20,
     elevation: 10,
-    padding: 20,
+    padding: 16,
   },
-  text: { fontSize: 56, fontWeight: 'bold', color: '#333', textAlign: 'center' },
-  image: { width: '90%', height: '90%', borderRadius: 20 },
+  text: { fontSize: 42, fontWeight: 'bold', color: '#333', textAlign: 'center' },
+  image: { width: '90%', height: '90%', borderRadius: 16 },
   backBtn: {
     position: 'absolute',
-    top: 20,
-    left: 20,
+    top: 14,
+    left: 14,
     backgroundColor: 'rgba(255,255,255,0.85)',
-    padding: 15,
-    borderRadius: 15,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 14,
     zIndex: 20,
   },
-  backBtnText: { fontSize: 20, fontWeight: 'bold', color: '#333' },
+  backBtnText: { fontSize: 16, fontWeight: 'bold', color: '#333' },
   gateBar: {
     position: 'absolute',
-    bottom: 16,
+    bottom: 12,
     left: 0,
     right: 0,
     alignItems: 'center',
   },
   gateText: {
-    fontSize: 20,
+    fontSize: 16,
     fontWeight: 'bold',
     color: '#fff',
     backgroundColor: 'rgba(0,0,0,0.5)',
-    paddingHorizontal: 16,
-    paddingVertical: 6,
-    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 5,
+    borderRadius: 10,
     overflow: 'hidden',
   },
   gateTextReady: {
-    fontSize: 18,
+    fontSize: 15,
     fontWeight: 'bold',
     color: '#fff',
     backgroundColor: 'rgba(76,175,80,0.85)',
-    paddingHorizontal: 16,
-    paddingVertical: 6,
-    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 5,
+    borderRadius: 10,
     overflow: 'hidden',
   },
 });

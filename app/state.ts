@@ -18,6 +18,10 @@ export type Recording = {
 export type ItemOverrides = {
   recordings: Recording[];
   selectedRecordingId: string | null;   // null → use default TTS
+  imageUri?: string | null;             // file:// override for built-in image
+  customLabel?: string | null;          // override primary text
+  customCaption?: string | null;        // override caption
+  hidden?: boolean;                     // hide built-in item from child mode
 };
 
 export type CustomItem = {
@@ -59,7 +63,7 @@ const DEFAULT_STATE: PersistedState = {
   customItems: [],
   categoryLabels: DEFAULT_LABELS,
   pin: '1234',
-  kioskEnabled: false,
+  kioskEnabled: true,
 };
 
 export async function loadState(): Promise<PersistedState> {
@@ -229,6 +233,7 @@ export function buildItemsForCategory(
   cat: CategoryId,
   state: PersistedState,
   language: 'pl' | 'en' = 'pl',
+  options: { includeHidden?: boolean } = {},
 ): MergedItem[] {
   const out: MergedItem[] = [];
 
@@ -268,14 +273,18 @@ export function buildItemsForCategory(
 
   for (const rec of sourceArr) {
     const ovr = state.itemOverrides[rec.id];
+    if (ovr?.hidden && !options.includeHidden) continue;
     const selectedRec = ovr?.recordings.find((r) => r.id === ovr.selectedRecordingId);
+    const imageSource = ovr?.imageUri
+      ? { uri: ovr.imageUri }
+      : rec.filename ? { __builtinImage: rec.filename } : null;
     out.push({
       id: rec.id,
       category: cat,
       isCustom: false,
-      primary: pickPrimary(rec),
-      caption: pickCaption(rec),
-      imageSource: rec.filename ? { __builtinImage: rec.filename } : null,
+      primary: ovr?.customLabel?.trim() || pickPrimary(rec),
+      caption: ovr?.customCaption?.trim() || pickCaption(rec),
+      imageSource,
       customAudioUri: selectedRec?.uri ?? null,
       builtinAudioKey: selectedRec ? null : pickAudio(rec),
       hex: rec.hex,
@@ -379,6 +388,69 @@ export function getRecordingsFor(
   }
   const ovr = getOverrides(state, itemId);
   return { recordings: ovr.recordings, selectedId: ovr.selectedRecordingId };
+}
+
+/** Set/clear image override for either built-in or custom item. */
+export function setItemImage(
+  state: PersistedState,
+  itemId: string,
+  uri: string | null,
+): PersistedState {
+  if (itemId.startsWith('custom_')) {
+    return updateCustomItem(state, itemId, { imageUri: uri ?? '' });
+  }
+  return upsertOverride(state, itemId, { imageUri: uri });
+}
+
+/** Set/clear primary label override (custom items always have a label). */
+export function setItemLabel(
+  state: PersistedState,
+  itemId: string,
+  label: string | null,
+): PersistedState {
+  if (itemId.startsWith('custom_')) {
+    return updateCustomItem(state, itemId, { label: label ?? '' });
+  }
+  return upsertOverride(state, itemId, { customLabel: label });
+}
+
+/** Set/clear caption override (only built-ins have separate captions). */
+export function setItemCaption(
+  state: PersistedState,
+  itemId: string,
+  caption: string | null,
+): PersistedState {
+  if (itemId.startsWith('custom_')) return state;
+  return upsertOverride(state, itemId, { customCaption: caption });
+}
+
+/** Hide built-in (or fully delete custom) item from rotation. */
+export function deleteItem(
+  state: PersistedState,
+  itemId: string,
+): PersistedState {
+  if (itemId.startsWith('custom_')) return removeCustomItem(state, itemId);
+  return upsertOverride(state, itemId, { hidden: true });
+}
+
+/** Restore a built-in item that was previously hidden. */
+export function unhideItem(
+  state: PersistedState,
+  itemId: string,
+): PersistedState {
+  if (itemId.startsWith('custom_')) return state;
+  return upsertOverride(state, itemId, { hidden: false });
+}
+
+/** Restore built-in to its default (clears all overrides). */
+export function resetItemToDefault(
+  state: PersistedState,
+  itemId: string,
+): PersistedState {
+  if (itemId.startsWith('custom_')) return state;
+  const next = { ...state.itemOverrides };
+  delete next[itemId];
+  return { ...state, itemOverrides: next };
 }
 
 /* ---------- file deletion helper ---------- */

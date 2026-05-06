@@ -3,7 +3,7 @@
     "name": "Teach Your Kids",
     "slug": "app",
     "version": "1.0.0",
-    "orientation": "landscape",
+    "orientation": "default",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,

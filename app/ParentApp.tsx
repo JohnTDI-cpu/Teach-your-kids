@@ -13,6 +13,7 @@ import {
   Image,
   ScrollView,
   ActivityIndicator,
+  useWindowDimensions,
 } from 'react-native';
 import { Audio, AVPlaybackStatus } from 'expo-av';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -67,8 +68,14 @@ import {
   setCategoryLabel,
   getRecordingsFor,
   deleteFileQuietly,
+  setItemImage,
+  setItemLabel,
+  setItemCaption,
+  deleteItem,
+  unhideItem,
+  resetItemToDefault,
 } from './state';
-import { styles as appStyles } from './App';
+import { styles as appStyles, useDevice } from './App';
 
 type ParentScreen =
   | { kind: 'home' }
@@ -91,6 +98,7 @@ const CATS: { id: CategoryId; emoji: string; color: string }[] = [
 ];
 
 export function ParentApp({ state, persist, onExit }: Props) {
+  const { width, height, isLandscape, rs } = useDevice();
   const [screen, setScreen] = useState<ParentScreen>({ kind: 'home' });
 
   if (screen.kind === 'category') {
@@ -141,49 +149,54 @@ export function ParentApp({ state, persist, onExit }: Props) {
   }
 
   // HOME
+  const tileW = isLandscape ? Math.min(width * 0.40, 360) : Math.min(width * 0.43, 320);
+  const tileH = tileW / (isLandscape ? 1.6 : 1.25);
+  const iconSize = rs(38, 50);
+  const catTextSize = rs(16, 22);
+
   return (
     <View style={[appStyles.container, { backgroundColor: '#f3f4f6' }]}>
       <TouchableOpacity style={appStyles.backBtn} onPress={onExit}>
         <Text style={appStyles.backBtnText}>↩ Wyjdź</Text>
       </TouchableOpacity>
 
-      <Text style={appStyles.title}>Panel Rodzica 👩‍💻</Text>
-      <Text style={[appStyles.subtitle, { fontSize: 18 }]}>
+      <Text style={[appStyles.title, { fontSize: rs(18, 24) }]}>Panel Rodzica 👩‍💻</Text>
+      <Text style={[appStyles.subtitle, { fontSize: rs(12, 15) }]}>
         Wybierz kategorię żeby nagrać własny głos do każdego obrazka.
       </Text>
 
-      <View style={appStyles.gridContainer}>
+      <View style={[appStyles.gridContainer, { gap: isLandscape ? 16 : 12 }]}>
         {CATS.map((c) => {
           const label = state.categoryLabels[c.id];
           const count = buildItemsForCategory(c.id, state, 'pl').length;
           return (
             <TouchableOpacity
               key={c.id}
-              style={[appStyles.categoryBtn, { backgroundColor: c.color }]}
+              style={[appStyles.categoryBtn, { backgroundColor: c.color, width: tileW, height: tileH }]}
               onPress={() => setScreen({ kind: 'category', cat: c.id })}
             >
               <View style={appStyles.tileBg}>
-                <Text style={appStyles.categoryIcon}>{c.emoji}</Text>
-                <Text style={appStyles.categoryText}>{label}</Text>
-                <Text style={{ color: '#fff', fontSize: 16 }}>{count} obrazków</Text>
+                <Text style={[appStyles.categoryIcon, { fontSize: iconSize }]}>{c.emoji}</Text>
+                <Text style={[appStyles.categoryText, { fontSize: catTextSize }]}>{label}</Text>
+                <Text style={{ color: '#fff', fontSize: rs(12, 15) }}>{count} obrazków</Text>
               </View>
             </TouchableOpacity>
           );
         })}
       </View>
 
-      <View style={{ flexDirection: 'row', gap: 16, marginTop: 24, flexWrap: 'wrap', justifyContent: 'center' }}>
+      <View style={{ flexDirection: 'row', gap: 14, marginTop: 18, flexWrap: 'wrap', justifyContent: 'center' }}>
         <TouchableOpacity
-          style={[appStyles.menuBtn, { backgroundColor: '#FF9800' }]}
+          style={[appStyles.menuBtn, { backgroundColor: '#FF9800', paddingVertical: 10, paddingHorizontal: 20 }]}
           onPress={() => setScreen({ kind: 'settings' })}
         >
-          <Text style={appStyles.menuBtnText}>⚙️ Ustawienia</Text>
+          <Text style={[appStyles.menuBtnText, { fontSize: rs(15, 20) }]}>⚙️ Ustawienia</Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={[appStyles.menuBtn, { backgroundColor: '#9C27B0' }]}
+          style={[appStyles.menuBtn, { backgroundColor: '#9C27B0', paddingVertical: 10, paddingHorizontal: 20 }]}
           onPress={() => setScreen({ kind: 'add', cat: null })}
         >
-          <Text style={appStyles.menuBtnText}>➕ Dodaj swój</Text>
+          <Text style={[appStyles.menuBtnText, { fontSize: rs(15, 20) }]}>➕ Dodaj swój</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -209,7 +222,8 @@ function CategoryView({
   onOpenItem: (itemId: string) => void;
   onAddCustom: () => void;
 }) {
-  const items = useMemo(() => buildItemsForCategory(cat, state, 'pl'), [cat, state]);
+  const { rs } = useDevice();
+  const items = useMemo(() => buildItemsForCategory(cat, state, 'pl', { includeHidden: true }), [cat, state]);
   const label = state.categoryLabels[cat];
 
   const onLongPressDelete = useCallback(
@@ -238,26 +252,32 @@ function CategoryView({
     [state, persist],
   );
 
+  const { width, height } = useWindowDimensions();
+  const isLandscape = width > height;
+  const cols = isLandscape ? Math.floor(width / 160) : Math.floor(width / 150);
+  const cellSize = Math.min(Math.floor((width - 32 - (cols - 1) * 12) / cols), 160);
+
   return (
     <View style={[appStyles.container, { backgroundColor: '#f3f4f6', alignItems: 'stretch' }]}>
       <TouchableOpacity style={appStyles.backBtn} onPress={onBack}>
         <Text style={appStyles.backBtnText}>↩ Wróć</Text>
       </TouchableOpacity>
 
-      <Text style={[appStyles.title, { marginTop: 60 }]}>{label}</Text>
+      <Text style={[appStyles.title, { marginTop: 60, fontSize: rs(18, 24) }]}>{label}</Text>
 
       <ScrollView contentContainerStyle={parentStyles.gridScroll}>
         <TouchableOpacity
-          style={[parentStyles.gridCell, { backgroundColor: '#9C27B0' }]}
+          style={[parentStyles.gridCell, { backgroundColor: '#9C27B0', width: cellSize, height: cellSize + 20 }]}
           onPress={onAddCustom}
         >
-          <Text style={{ fontSize: 60, color: '#fff' }}>➕</Text>
-          <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>Dodaj swój</Text>
+          <Text style={{ fontSize: Math.min(cellSize * 0.35, 54), color: '#fff' }}>➕</Text>
+          <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 13 }}>Dodaj swój</Text>
         </TouchableOpacity>
 
         {items.map((it) => {
           const { recordings, selectedId } = getRecordingsFor(state, it.id);
           const hasCustom = !!selectedId;
+          const isHidden = !it.isCustom && !!state.itemOverrides[it.id]?.hidden;
           const img =
             it.imageSource?.__builtinImage
               ? ImageAssets[it.imageSource.__builtinImage]
@@ -267,7 +287,9 @@ function CategoryView({
               key={it.id}
               style={[
                 parentStyles.gridCell,
+                { width: cellSize, height: cellSize + 20 },
                 cat === 'colors' && { backgroundColor: it.hex || '#ccc' },
+                isHidden && { opacity: 0.4 },
               ]}
               onPress={() => onOpenItem(it.id)}
               onLongPress={() => onLongPressDelete(it)}
@@ -293,6 +315,7 @@ function CategoryView({
                 {it.primary}
               </Text>
               <View style={parentStyles.badgeRow}>
+                {isHidden && <Text style={parentStyles.badgeHidden}>🙈 ukryta</Text>}
                 {hasCustom && <Text style={parentStyles.badgeMine}>🎙 mój głos</Text>}
                 {recordings.length > 0 && (
                   <Text style={parentStyles.badgeCount}>{recordings.length}</Text>
@@ -324,7 +347,7 @@ function ItemEditor({
   onBack: () => void;
 }) {
   const item = useMemo(() => {
-    const all = buildItemsForCategory(cat, state, 'pl');
+    const all = buildItemsForCategory(cat, state, 'pl', { includeHidden: true });
     return all.find((x) => x.id === itemId);
   }, [cat, state, itemId]);
 
@@ -339,6 +362,20 @@ function ItemEditor({
   const playSoundRef = useRef<Audio.Sound | null>(null);
   const [variantsExpanded, setVariantsExpanded] = useState(false);
 
+  // Text-edit local state — synced to current item, flushed on blur
+  const [labelDraft, setLabelDraft] = useState(item?.primary ?? '');
+  const [captionDraft, setCaptionDraft] = useState(item?.caption ?? '');
+  useEffect(() => {
+    setLabelDraft(item?.primary ?? '');
+    setCaptionDraft(item?.caption ?? '');
+  }, [item?.primary, item?.caption]);
+
+  const isCustom = itemId.startsWith('custom_');
+  const ovr = !isCustom ? state.itemOverrides[itemId] : undefined;
+  const hasImageOverride = !isCustom && !!ovr?.imageUri;
+  const hasLabelOverride = !isCustom && !!(ovr?.customLabel || ovr?.customCaption);
+  const isHidden = !isCustom && !!ovr?.hidden;
+
   useEffect(() => {
     return () => {
       if (recording) recording.stopAndUnloadAsync().catch(() => {});
@@ -346,6 +383,116 @@ function ItemEditor({
       if (recTimerRef.current) clearInterval(recTimerRef.current);
     };
   }, [recording]);
+
+  const pickImage = useCallback(async () => {
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) {
+      Alert.alert('Brak dostępu', 'Włącz uprawnienia do galerii.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      quality: 0.85,
+      allowsEditing: true,
+      aspect: [4, 3],
+    });
+    if (result.canceled || !result.assets?.[0]) return;
+    const src = result.assets[0].uri;
+    const ext = src.split('.').pop()?.split('?')[0] || 'jpg';
+    const dest = `${IMAGES_DIR}img_${uuid()}.${ext}`;
+    try {
+      await FileSystem.copyAsync({ from: src, to: dest });
+      // delete previous override file if any
+      if (hasImageOverride && ovr?.imageUri) await deleteFileQuietly(ovr.imageUri);
+      await persist(setItemImage(state, itemId, dest));
+    } catch (e) {
+      console.warn('pickImage', e);
+    }
+  }, [state, persist, itemId, hasImageOverride, ovr?.imageUri]);
+
+  const takePhoto = useCallback(async () => {
+    const perm = await ImagePicker.requestCameraPermissionsAsync();
+    if (!perm.granted) {
+      Alert.alert('Brak dostępu', 'Włącz uprawnienia do aparatu.');
+      return;
+    }
+    const result = await ImagePicker.launchCameraAsync({
+      quality: 0.85,
+      allowsEditing: true,
+      aspect: [4, 3],
+    });
+    if (result.canceled || !result.assets?.[0]) return;
+    const src = result.assets[0].uri;
+    const ext = src.split('.').pop()?.split('?')[0] || 'jpg';
+    const dest = `${IMAGES_DIR}img_${uuid()}.${ext}`;
+    try {
+      await FileSystem.copyAsync({ from: src, to: dest });
+      if (hasImageOverride && ovr?.imageUri) await deleteFileQuietly(ovr.imageUri);
+      await persist(setItemImage(state, itemId, dest));
+    } catch (e) {
+      console.warn('takePhoto', e);
+    }
+  }, [state, persist, itemId, hasImageOverride, ovr?.imageUri]);
+
+  const resetImage = useCallback(async () => {
+    if (!hasImageOverride) return;
+    if (ovr?.imageUri) await deleteFileQuietly(ovr.imageUri);
+    await persist(setItemImage(state, itemId, null));
+  }, [state, persist, itemId, hasImageOverride, ovr?.imageUri]);
+
+  const flushLabel = useCallback(async () => {
+    const v = labelDraft.trim();
+    if (v === (item?.primary ?? '')) return;
+    await persist(setItemLabel(state, itemId, v || null));
+  }, [labelDraft, item?.primary, state, persist, itemId]);
+
+  const flushCaption = useCallback(async () => {
+    if (isCustom) return;
+    const v = captionDraft.trim();
+    if (v === (item?.caption ?? '')) return;
+    await persist(setItemCaption(state, itemId, v || null));
+  }, [captionDraft, item?.caption, isCustom, state, persist, itemId]);
+
+  const onDeleteItem = useCallback(() => {
+    Alert.alert(
+      isCustom ? 'Usunąć fiszkę?' : 'Ukryć tę fiszkę?',
+      isCustom
+        ? 'Fiszka i wszystkie nagrania zostaną usunięte na stałe.'
+        : 'Fiszka zniknie z trybu dziecka. Możesz ją przywrócić wracając do domyślnych.',
+      [
+        { text: 'Anuluj', style: 'cancel' },
+        {
+          text: isCustom ? 'Usuń' : 'Ukryj',
+          style: 'destructive',
+          onPress: async () => {
+            if (isCustom) {
+              const ci = state.customItems.find((c) => c.id === itemId);
+              if (ci) {
+                await deleteFileQuietly(ci.imageUri);
+                for (const r of ci.recordings) await deleteFileQuietly(r.uri);
+              }
+            }
+            await persist(deleteItem(state, itemId));
+            onBack();
+          },
+        },
+      ],
+    );
+  }, [isCustom, state, persist, itemId, onBack]);
+
+  const onResetDefault = useCallback(() => {
+    Alert.alert('Przywrócić oryginał?', 'Usuwa zmiany obrazka, podpisu i nagrań.', [
+      { text: 'Anuluj', style: 'cancel' },
+      {
+        text: 'Przywróć',
+        onPress: async () => {
+          if (ovr?.imageUri) await deleteFileQuietly(ovr.imageUri);
+          for (const r of ovr?.recordings ?? []) await deleteFileQuietly(r.uri);
+          await persist(resetItemToDefault(state, itemId));
+        },
+      },
+    ]);
+  }, [state, persist, itemId, ovr]);
 
   const startRecording = useCallback(async () => {
     try {
@@ -498,6 +645,9 @@ function ItemEditor({
     [state, persist, itemId],
   );
 
+  const { width, height, isLandscape, rs } = useDevice();
+  const heroH = isLandscape ? Math.min(height * 0.42, 180) : Math.min(height * 0.28, 220);
+
   if (!item) {
     return (
       <View style={[appStyles.container, { backgroundColor: '#f3f4f6' }]}>
@@ -520,8 +670,8 @@ function ItemEditor({
         <Text style={appStyles.backBtnText}>↩ Wróć</Text>
       </TouchableOpacity>
 
-      <ScrollView contentContainerStyle={{ padding: 20, paddingTop: 80, alignItems: 'center' }}>
-        <View style={[parentStyles.heroCard, cat === 'colors' && { backgroundColor: item.hex || '#fff' }]}>
+      <ScrollView contentContainerStyle={{ padding: 16, paddingTop: 70, alignItems: 'center' }}>
+        <View style={[parentStyles.heroCard, { height: heroH }, cat === 'colors' && { backgroundColor: item.hex || '#fff' }]}>
           {cat === 'colors' ? (
             <Text style={[appStyles.text, { color: '#fff', textShadowColor: 'rgba(0,0,0,0.6)', textShadowRadius: 6 }]}>
               {item.primary}
@@ -531,8 +681,49 @@ function ItemEditor({
           ) : (
             <Text style={appStyles.text}>{item.primary}</Text>
           )}
+          {hasImageOverride && (
+            <Text style={parentStyles.overrideTag}>🖼 zmieniony</Text>
+          )}
         </View>
-        <Text style={[appStyles.subtitle, { fontSize: 22 }]}>{item.caption}</Text>
+
+        {/* Image controls — hidden for color items (they have no image) */}
+        {cat !== 'colors' && (
+          <View style={parentStyles.imgActions}>
+            <TouchableOpacity style={[parentStyles.smallBtn, { backgroundColor: '#2196F3' }]} onPress={pickImage}>
+              <Text style={parentStyles.smallBtnText}>📷 Galeria</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[parentStyles.smallBtn, { backgroundColor: '#673AB7' }]} onPress={takePhoto}>
+              <Text style={parentStyles.smallBtnText}>📸 Aparat</Text>
+            </TouchableOpacity>
+            {hasImageOverride && (
+              <TouchableOpacity style={[parentStyles.smallBtn, { backgroundColor: '#9E9E9E' }]} onPress={resetImage}>
+                <Text style={parentStyles.smallBtnText}>↺ Oryginał</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
+
+        {/* Text editing — label always; caption only for built-ins */}
+        <Text style={parentStyles.fieldLabel}>Tekst (co dziecko zobaczy):</Text>
+        <TextInput
+          style={[parentStyles.textInput, { width: '100%', maxWidth: 600 }]}
+          value={labelDraft}
+          onChangeText={setLabelDraft}
+          onBlur={flushLabel}
+          maxLength={60}
+        />
+        {!isCustom && cat !== 'colors' && (
+          <>
+            <Text style={parentStyles.fieldLabel}>Podpis (pełne zdanie):</Text>
+            <TextInput
+              style={[parentStyles.textInput, { width: '100%', maxWidth: 600 }]}
+              value={captionDraft}
+              onChangeText={setCaptionDraft}
+              onBlur={flushCaption}
+              maxLength={120}
+            />
+          </>
+        )}
 
         {/* Built-in audio row */}
         {item.builtinAudioKey && (
@@ -632,6 +823,35 @@ function ItemEditor({
             {isRecording ? `⏹ Zatrzymaj (${recElapsed}s)` : '🎙 Nagraj nowy wariant'}
           </Text>
         </TouchableOpacity>
+
+        {/* Danger zone */}
+        <View style={parentStyles.dangerZone}>
+          {!isCustom && (hasImageOverride || hasLabelOverride || recordings.length > 0 || isHidden) && (
+            <TouchableOpacity
+              style={[parentStyles.smallBtn, { backgroundColor: '#9E9E9E', minWidth: 200 }]}
+              onPress={onResetDefault}
+            >
+              <Text style={parentStyles.smallBtnText}>↺ Przywróć oryginał</Text>
+            </TouchableOpacity>
+          )}
+          {isHidden ? (
+            <TouchableOpacity
+              style={[parentStyles.smallBtn, { backgroundColor: '#4CAF50', minWidth: 200 }]}
+              onPress={async () => { await persist(unhideItem(state, itemId)); }}
+            >
+              <Text style={parentStyles.smallBtnText}>👁 Pokaż ponownie</Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              style={[parentStyles.smallBtn, { backgroundColor: '#D32F2F', minWidth: 200 }]}
+              onPress={onDeleteItem}
+            >
+              <Text style={parentStyles.smallBtnText}>
+                🗑 {isCustom ? 'Usuń fiszkę' : 'Ukryj fiszkę'}
+              </Text>
+            </TouchableOpacity>
+          )}
+        </View>
       </ScrollView>
     </View>
   );
@@ -861,15 +1081,15 @@ function AddCustomItem({
         <Text style={appStyles.backBtnText}>↩ Wróć</Text>
       </TouchableOpacity>
 
-      <ScrollView contentContainerStyle={{ padding: 20, paddingTop: 80 }}>
-        <Text style={[appStyles.title, { fontSize: 28 }]}>Dodaj swoją fiszkę</Text>
+      <ScrollView contentContainerStyle={{ padding: 16, paddingTop: 68 }}>
+        <Text style={[appStyles.title, { fontSize: 20 }]}>Dodaj swoją fiszkę</Text>
 
         {/* Image */}
-        <View style={parentStyles.heroCard}>
+        <View style={[parentStyles.heroCard, { height: 160 }]}>
           {imageUri ? (
             <Image source={{ uri: imageUri }} style={parentStyles.heroImg} resizeMode="contain" />
           ) : (
-            <Text style={{ color: '#999', fontSize: 18 }}>Brak zdjęcia</Text>
+            <Text style={{ color: '#999', fontSize: 16 }}>Brak zdjęcia</Text>
           )}
         </View>
         <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 16 }}>
@@ -1045,8 +1265,8 @@ function Settings({
         <Text style={appStyles.backBtnText}>↩ Wróć</Text>
       </TouchableOpacity>
 
-      <ScrollView contentContainerStyle={{ padding: 20, paddingTop: 80 }}>
-        <Text style={appStyles.title}>Ustawienia</Text>
+      <ScrollView contentContainerStyle={{ padding: 16, paddingTop: 68 }}>
+        <Text style={[appStyles.title, { fontSize: 20 }]}>Ustawienia</Text>
 
         {/* Kiosk lock */}
         <Text style={parentStyles.fieldLabel}>🔒 Blokada ekranu (kiosk)</Text>
@@ -1169,6 +1389,16 @@ const parentStyles = StyleSheet.create({
     fontSize: 11,
     color: '#fff',
     backgroundColor: '#4CAF50',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    overflow: 'hidden',
+    fontWeight: 'bold',
+  },
+  badgeHidden: {
+    fontSize: 11,
+    color: '#fff',
+    backgroundColor: '#9E9E9E',
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 6,
@@ -1322,5 +1552,44 @@ const parentStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginLeft: 12,
+  },
+  imgActions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
+  smallBtn: {
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    alignItems: 'center',
+    elevation: 2,
+  },
+  smallBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 14 },
+  overrideTag: {
+    position: 'absolute',
+    top: 6,
+    right: 8,
+    fontSize: 11,
+    color: '#fff',
+    backgroundColor: 'rgba(33,150,243,0.85)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    overflow: 'hidden',
+    fontWeight: 'bold',
+  },
+  dangerZone: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    justifyContent: 'center',
+    marginTop: 24,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#ddd',
+    width: '100%',
   },
 });
