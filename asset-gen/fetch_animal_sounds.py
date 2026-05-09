@@ -70,8 +70,10 @@ def download(url, out_path):
     with urllib.request.urlopen(req, timeout=60) as r, open(out_path, "wb") as f:
         f.write(r.read())
 
-def to_mp3(src, dst, max_s=15):
-    """Convert any audio file to mono 44.1kHz mp3, capped at max_s seconds."""
+def to_mp3(src, dst, max_s=5):
+    """Convert any audio file to mono 44.1kHz mp3, capped at max_s seconds.
+    A 5s cap keeps the kid's wait between flashcards short — long brays
+    or barking sequences would otherwise force a 10s+ pause."""
     cmd = ["ffmpeg", "-y", "-loglevel", "error",
            "-i", str(src),
            "-t", str(max_s),

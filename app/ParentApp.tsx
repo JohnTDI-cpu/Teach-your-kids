@@ -77,7 +77,9 @@ import {
   setLanguage,
   SUPPORTED_LANGUAGES,
   LanguageCode,
+  currentProfile,
 } from './state';
+import { useApp } from './AppContext';
 import { styles as appStyles, useDevice } from './App';
 
 type ParentScreen =
@@ -87,12 +89,6 @@ type ParentScreen =
   | { kind: 'add'; cat: CategoryId | null }
   | { kind: 'settings' };
 
-type Props = {
-  state: PersistedState;
-  persist: (next: PersistedState) => Promise<void>;
-  onExit: () => void;
-};
-
 const CATS: { id: CategoryId; emoji: string; color: string }[] = [
   { id: 'letters', emoji: 'A',  color: '#FF5722' },
   { id: 'numbers', emoji: '1',  color: '#2196F3' },
@@ -100,7 +96,8 @@ const CATS: { id: CategoryId; emoji: string; color: string }[] = [
   { id: 'colors',  emoji: '🎨', color: '#E91E63' },
 ];
 
-export function ParentApp({ state, persist, onExit }: Props) {
+export function ParentApp({ onExit }: { onExit: () => void }) {
+  const { state, lang, profile, t, tn } = useApp();
   const { width, height, isLandscape, rs } = useDevice();
   const [screen, setScreen] = useState<ParentScreen>({ kind: 'home' });
 
@@ -108,11 +105,9 @@ export function ParentApp({ state, persist, onExit }: Props) {
     return (
       <CategoryView
         cat={screen.cat}
-        state={state}
         onBack={() => setScreen({ kind: 'home' })}
         onOpenItem={(itemId) => setScreen({ kind: 'item', itemId, cat: screen.cat })}
         onAddCustom={() => setScreen({ kind: 'add', cat: screen.cat })}
-        persist={persist}
       />
     );
   }
@@ -121,8 +116,6 @@ export function ParentApp({ state, persist, onExit }: Props) {
       <ItemEditor
         itemId={screen.itemId}
         cat={screen.cat}
-        state={state}
-        persist={persist}
         onBack={() => setScreen({ kind: 'category', cat: screen.cat })}
       />
     );
@@ -131,8 +124,6 @@ export function ParentApp({ state, persist, onExit }: Props) {
     return (
       <AddCustomItem
         defaultCat={screen.cat}
-        state={state}
-        persist={persist}
         onBack={() =>
           screen.cat
             ? setScreen({ kind: 'category', cat: screen.cat })
@@ -143,11 +134,7 @@ export function ParentApp({ state, persist, onExit }: Props) {
   }
   if (screen.kind === 'settings') {
     return (
-      <Settings
-        state={state}
-        persist={persist}
-        onBack={() => setScreen({ kind: 'home' })}
-      />
+      <Settings onBack={() => setScreen({ kind: 'home' })} />
     );
   }
 
@@ -160,18 +147,18 @@ export function ParentApp({ state, persist, onExit }: Props) {
   return (
     <View style={[appStyles.container, { backgroundColor: '#f3f4f6' }]}>
       <TouchableOpacity style={appStyles.backBtn} onPress={onExit}>
-        <Text style={appStyles.backBtnText}>↩ Wyjdź</Text>
+        <Text style={appStyles.backBtnText}>{t('exit')}</Text>
       </TouchableOpacity>
 
-      <Text style={[appStyles.title, { fontSize: rs(18, 24) }]}>Panel Rodzica 👩‍💻</Text>
+      <Text style={[appStyles.title, { fontSize: rs(18, 24) }]}>{t('parent_title')}</Text>
       <Text style={[appStyles.subtitle, { fontSize: rs(12, 15) }]}>
-        Wybierz kategorię żeby nagrać własny głos do każdego obrazka.
+        {t('parent_subtitle')}
       </Text>
 
       <View style={[appStyles.gridContainer, { gap: isLandscape ? 16 : 12 }]}>
         {CATS.map((c) => {
-          const label = state.categoryLabels[c.id];
-          const count = buildItemsForCategory(c.id, state, state.language).length;
+          const label = profile.categoryLabels[c.id];
+          const count = buildItemsForCategory(c.id, state, lang).length;
           return (
             <TouchableOpacity
               key={c.id}
@@ -181,7 +168,7 @@ export function ParentApp({ state, persist, onExit }: Props) {
               <View style={appStyles.tileBg}>
                 <Text style={[appStyles.categoryIcon, { fontSize: iconSize }]}>{c.emoji}</Text>
                 <Text style={[appStyles.categoryText, { fontSize: catTextSize }]}>{label}</Text>
-                <Text style={{ color: '#fff', fontSize: rs(12, 15) }}>{count} obrazków</Text>
+                <Text style={{ color: '#fff', fontSize: rs(12, 15) }}>{tn('count_items', { n: count })}</Text>
               </View>
             </TouchableOpacity>
           );
@@ -193,13 +180,13 @@ export function ParentApp({ state, persist, onExit }: Props) {
           style={[appStyles.menuBtn, { backgroundColor: '#FF9800', paddingVertical: 10, paddingHorizontal: 20 }]}
           onPress={() => setScreen({ kind: 'settings' })}
         >
-          <Text style={[appStyles.menuBtnText, { fontSize: rs(15, 20) }]}>⚙️ Ustawienia</Text>
+          <Text style={[appStyles.menuBtnText, { fontSize: rs(15, 20) }]}>{t('parent_settings')}</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[appStyles.menuBtn, { backgroundColor: '#9C27B0', paddingVertical: 10, paddingHorizontal: 20 }]}
           onPress={() => setScreen({ kind: 'add', cat: null })}
         >
-          <Text style={[appStyles.menuBtnText, { fontSize: rs(15, 20) }]}>➕ Dodaj swój</Text>
+          <Text style={[appStyles.menuBtnText, { fontSize: rs(15, 20) }]}>{t('add_custom_full')}</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -212,36 +199,33 @@ export function ParentApp({ state, persist, onExit }: Props) {
 
 function CategoryView({
   cat,
-  state,
-  persist,
   onBack,
   onOpenItem,
   onAddCustom,
 }: {
   cat: CategoryId;
-  state: PersistedState;
-  persist: (s: PersistedState) => Promise<void>;
   onBack: () => void;
   onOpenItem: (itemId: string) => void;
   onAddCustom: () => void;
 }) {
+  const { state, persist, lang, profile, t } = useApp();
   const { rs } = useDevice();
-  const items = useMemo(() => buildItemsForCategory(cat, state, state.language, { includeHidden: true }), [cat, state]);
-  const label = state.categoryLabels[cat];
+  const items = useMemo(() => buildItemsForCategory(cat, state, lang, { includeHidden: true }), [cat, state, lang]);
+  const label = profile.categoryLabels[cat];
 
   const onLongPressDelete = useCallback(
     (item: MergedItem) => {
       if (!item.isCustom) return;
       Alert.alert(
-        'Usunąć?',
-        `Usunąć "${item.primary}" wraz ze wszystkimi nagraniami?`,
+        t('delete_custom_title'),
+        t('delete_custom_msg'),
         [
-          { text: 'Anuluj', style: 'cancel' },
+          { text: t('cancel'), style: 'cancel' },
           {
-            text: 'Usuń',
+            text: t('delete_recording_btn'),
             style: 'destructive',
             onPress: async () => {
-              const ci = state.customItems.find((c) => c.id === item.id);
+              const ci = profile.customItems.find((c) => c.id === item.id);
               if (ci) {
                 await deleteFileQuietly(ci.imageUri);
                 for (const r of ci.recordings) await deleteFileQuietly(r.uri);
@@ -263,7 +247,7 @@ function CategoryView({
   return (
     <View style={[appStyles.container, { backgroundColor: '#f3f4f6', alignItems: 'stretch' }]}>
       <TouchableOpacity style={appStyles.backBtn} onPress={onBack}>
-        <Text style={appStyles.backBtnText}>↩ Wróć</Text>
+        <Text style={appStyles.backBtnText}>{t('back')}</Text>
       </TouchableOpacity>
 
       <Text style={[appStyles.title, { marginTop: 60, fontSize: rs(18, 24) }]}>{label}</Text>
@@ -274,13 +258,13 @@ function CategoryView({
           onPress={onAddCustom}
         >
           <Text style={{ fontSize: Math.min(cellSize * 0.35, 54), color: '#fff' }}>➕</Text>
-          <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 13 }}>Dodaj swój</Text>
+          <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 13 }}>{t('add_custom_short')}</Text>
         </TouchableOpacity>
 
         {items.map((it) => {
           const { recordings, selectedId } = getRecordingsFor(state, it.id);
           const hasCustom = !!selectedId;
-          const isHidden = !it.isCustom && !!state.itemOverrides[it.id]?.hidden;
+          const isHidden = !it.isCustom && !!profile.itemOverrides[it.id]?.hidden;
           const img =
             it.imageSource?.__builtinImage
               ? ImageAssets[it.imageSource.__builtinImage]
@@ -318,8 +302,8 @@ function CategoryView({
                 {it.primary}
               </Text>
               <View style={parentStyles.badgeRow}>
-                {isHidden && <Text style={parentStyles.badgeHidden}>🙈 ukryta</Text>}
-                {hasCustom && <Text style={parentStyles.badgeMine}>🎙 mój głos</Text>}
+                {isHidden && <Text style={parentStyles.badgeHidden}>{t('badge_hidden')}</Text>}
+                {hasCustom && <Text style={parentStyles.badgeMine}>{t('badge_my_voice')}</Text>}
                 {recordings.length > 0 && (
                   <Text style={parentStyles.badgeCount}>{recordings.length}</Text>
                 )}
@@ -339,20 +323,17 @@ function CategoryView({
 function ItemEditor({
   itemId,
   cat,
-  state,
-  persist,
   onBack,
 }: {
   itemId: string;
   cat: CategoryId;
-  state: PersistedState;
-  persist: (s: PersistedState) => Promise<void>;
   onBack: () => void;
 }) {
+  const { state, persist, lang, profile, t, tn } = useApp();
   const item = useMemo(() => {
-    const all = buildItemsForCategory(cat, state, state.language, { includeHidden: true });
+    const all = buildItemsForCategory(cat, state, lang, { includeHidden: true });
     return all.find((x) => x.id === itemId);
-  }, [cat, state, itemId]);
+  }, [cat, state, lang, itemId]);
 
   const { recordings, selectedId } = getRecordingsFor(state, itemId);
 
@@ -374,7 +355,7 @@ function ItemEditor({
   }, [item?.primary, item?.caption]);
 
   const isCustom = itemId.startsWith('custom_');
-  const ovr = !isCustom ? state.itemOverrides[itemId] : undefined;
+  const ovr = !isCustom ? profile.itemOverrides[itemId] : undefined;
   const hasImageOverride = !isCustom && !!ovr?.imageUri;
   const hasLabelOverride = !isCustom && !!(ovr?.customLabel || ovr?.customCaption);
   const isHidden = !isCustom && !!ovr?.hidden;
@@ -390,7 +371,7 @@ function ItemEditor({
   const pickImage = useCallback(async () => {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) {
-      Alert.alert('Brak dostępu', 'Włącz uprawnienia do galerii.');
+      Alert.alert(t('no_permission_camera_short'), t('no_permission_gallery'));
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -416,7 +397,7 @@ function ItemEditor({
   const takePhoto = useCallback(async () => {
     const perm = await ImagePicker.requestCameraPermissionsAsync();
     if (!perm.granted) {
-      Alert.alert('Brak dostępu', 'Włącz uprawnienia do aparatu.');
+      Alert.alert(t('no_permission_camera_short'), t('no_permission_camera'));
       return;
     }
     const result = await ImagePicker.launchCameraAsync({
@@ -458,18 +439,18 @@ function ItemEditor({
 
   const onDeleteItem = useCallback(() => {
     Alert.alert(
-      isCustom ? 'Usunąć fiszkę?' : 'Ukryć tę fiszkę?',
+      isCustom ? t('delete_custom_title') : t('hide_builtin_title'),
       isCustom
-        ? 'Fiszka i wszystkie nagrania zostaną usunięte na stałe.'
-        : 'Fiszka zniknie z trybu dziecka. Możesz ją przywrócić wracając do domyślnych.',
+        ? t('delete_custom_msg')
+        : t('hide_builtin_msg'),
       [
-        { text: 'Anuluj', style: 'cancel' },
+        { text: t('cancel'), style: 'cancel' },
         {
-          text: isCustom ? 'Usuń' : 'Ukryj',
+          text: isCustom ? t('delete_recording_btn') : t('hide_btn'),
           style: 'destructive',
           onPress: async () => {
             if (isCustom) {
-              const ci = state.customItems.find((c) => c.id === itemId);
+              const ci = profile.customItems.find((c) => c.id === itemId);
               if (ci) {
                 await deleteFileQuietly(ci.imageUri);
                 for (const r of ci.recordings) await deleteFileQuietly(r.uri);
@@ -484,10 +465,10 @@ function ItemEditor({
   }, [isCustom, state, persist, itemId, onBack]);
 
   const onResetDefault = useCallback(() => {
-    Alert.alert('Przywrócić oryginał?', 'Usuwa zmiany obrazka, podpisu i nagrań.', [
-      { text: 'Anuluj', style: 'cancel' },
+    Alert.alert(t('reset_to_default_title'), t('reset_to_default_msg'), [
+      { text: t('cancel'), style: 'cancel' },
       {
-        text: 'Przywróć',
+        text: t('reset_to_default_btn'),
         onPress: async () => {
           if (ovr?.imageUri) await deleteFileQuietly(ovr.imageUri);
           for (const r of ovr?.recordings ?? []) await deleteFileQuietly(r.uri);
@@ -508,7 +489,7 @@ function ItemEditor({
 
       const perm = await Audio.requestPermissionsAsync();
       if (!perm.granted) {
-        Alert.alert('Brak dostępu', 'Włącz uprawnienie do mikrofonu w ustawieniach.');
+        Alert.alert(t('no_permission_camera_short'), t('no_permission_mic'));
         return;
       }
 
@@ -531,7 +512,7 @@ function ItemEditor({
       recTimerRef.current = setInterval(() => setRecElapsed((s) => s + 1), 1000);
     } catch (e: any) {
       console.error('startRecording error', e);
-      Alert.alert('Błąd nagrywania', String(e?.message || e));
+      Alert.alert('Recording error', String(e?.message || e));
     }
   }, []);
 
@@ -626,10 +607,10 @@ function ItemEditor({
 
   const onDelete = useCallback(
     (r: Recording) => {
-      Alert.alert('Usunąć nagranie?', r.label || 'Nagranie', [
-        { text: 'Anuluj', style: 'cancel' },
+      Alert.alert(t('delete_recording_title'), r.label || '', [
+        { text: t('cancel'), style: 'cancel' },
         {
-          text: 'Usuń',
+          text: t('delete_recording_btn'),
           style: 'destructive',
           onPress: async () => {
             await deleteFileQuietly(r.uri);
@@ -693,21 +674,21 @@ function ItemEditor({
         {cat !== 'colors' && (
           <View style={parentStyles.imgActions}>
             <TouchableOpacity style={[parentStyles.smallBtn, { backgroundColor: '#2196F3' }]} onPress={pickImage}>
-              <Text style={parentStyles.smallBtnText}>📷 Galeria</Text>
+              <Text style={parentStyles.smallBtnText}>{t('image_change_gallery')}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={[parentStyles.smallBtn, { backgroundColor: '#673AB7' }]} onPress={takePhoto}>
-              <Text style={parentStyles.smallBtnText}>📸 Aparat</Text>
+              <Text style={parentStyles.smallBtnText}>{t('image_change_camera')}</Text>
             </TouchableOpacity>
             {hasImageOverride && (
               <TouchableOpacity style={[parentStyles.smallBtn, { backgroundColor: '#9E9E9E' }]} onPress={resetImage}>
-                <Text style={parentStyles.smallBtnText}>↺ Oryginał</Text>
+                <Text style={parentStyles.smallBtnText}>{t('image_reset_default')}</Text>
               </TouchableOpacity>
             )}
           </View>
         )}
 
         {/* Text editing — label always; caption only for built-ins */}
-        <Text style={parentStyles.fieldLabel}>Tekst (co dziecko zobaczy):</Text>
+        <Text style={parentStyles.fieldLabel}>{t('text_label_field')}</Text>
         <TextInput
           style={[parentStyles.textInput, { width: '100%', maxWidth: 600 }]}
           value={labelDraft}
@@ -717,7 +698,7 @@ function ItemEditor({
         />
         {!isCustom && cat !== 'colors' && (
           <>
-            <Text style={parentStyles.fieldLabel}>Podpis (pełne zdanie):</Text>
+            <Text style={parentStyles.fieldLabel}>{t('caption_full_field')}</Text>
             <TextInput
               style={[parentStyles.textInput, { width: '100%', maxWidth: 600 }]}
               value={captionDraft}
@@ -731,7 +712,7 @@ function ItemEditor({
         {/* Built-in audio row */}
         {item.builtinAudioKey && (
           <View style={parentStyles.recRow}>
-            <Text style={parentStyles.recName}>🤖 Domyślny głos (TTS)</Text>
+            <Text style={parentStyles.recName}>{t('tts_voice_label')}</Text>
             <View style={parentStyles.recButtons}>
               <TouchableOpacity style={parentStyles.iconBtn} onPress={playBuiltin}>
                 <Text style={parentStyles.iconBtnText}>
@@ -743,7 +724,7 @@ function ItemEditor({
                 onPress={() => onSelect(null)}
               >
                 <Text style={[parentStyles.iconBtnText, !selectedId && { color: '#fff' }]}>
-                  {!selectedId ? '✓ wybrane' : 'wybierz'}
+                  {!selectedId ? t('selected') : t('select')}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -759,9 +740,9 @@ function ItemEditor({
               activeOpacity={0.7}
             >
               <Text style={parentStyles.expandHeaderText}>
-                🎙 Twoje nagrania ({recordings.length})
+                {tn('your_recordings', { n: recordings.length })}
                 {selectedId && recordings.find((r) => r.id === selectedId)
-                  ? ` · aktywne: ${recordings.find((r) => r.id === selectedId)!.label}`
+                  ? ` · ${recordings.find((r) => r.id === selectedId)!.label}`
                   : ''}
               </Text>
               <Text style={parentStyles.expandChevron}>{variantsExpanded ? '▾' : '▸'}</Text>
@@ -796,7 +777,7 @@ function ItemEditor({
                             isSel && { color: '#fff' },
                           ]}
                         >
-                          {isSel ? '✓ wybrane' : 'wybierz'}
+                          {isSel ? t('selected') : t('select')}
                         </Text>
                       </TouchableOpacity>
                       <TouchableOpacity
@@ -823,7 +804,7 @@ function ItemEditor({
           onPress={isRecording ? stopRecording : startRecording}
         >
           <Text style={parentStyles.recordBtnText}>
-            {isRecording ? `⏹ Zatrzymaj (${recElapsed}s)` : '🎙 Nagraj nowy wariant'}
+            {isRecording ? tn('record_stop', { s: recElapsed }) : t('record_new_variant')}
           </Text>
         </TouchableOpacity>
 
@@ -866,15 +847,12 @@ function ItemEditor({
 
 function AddCustomItem({
   defaultCat,
-  state,
-  persist,
   onBack,
 }: {
   defaultCat: CategoryId | null;
-  state: PersistedState;
-  persist: (s: PersistedState) => Promise<void>;
   onBack: () => void;
 }) {
+  const { state, persist, lang, profile, t, tn } = useApp();
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [label, setLabel] = useState('');
   const [cat, setCat] = useState<CategoryId>(defaultCat || 'animals');
@@ -904,7 +882,7 @@ function AddCustomItem({
   const pickImage = useCallback(async () => {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) {
-      Alert.alert('Brak dostępu', 'Włącz uprawnienia do galerii.');
+      Alert.alert(t('no_permission_camera_short'), t('no_permission_gallery'));
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -931,7 +909,7 @@ function AddCustomItem({
   const takePhoto = useCallback(async () => {
     const perm = await ImagePicker.requestCameraPermissionsAsync();
     if (!perm.granted) {
-      Alert.alert('Brak dostępu', 'Włącz uprawnienia do aparatu.');
+      Alert.alert(t('no_permission_camera_short'), t('no_permission_camera'));
       return;
     }
     const result = await ImagePicker.launchCameraAsync({
@@ -960,7 +938,7 @@ function AddCustomItem({
       }
       const perm = await Audio.requestPermissionsAsync();
       if (!perm.granted) {
-        Alert.alert('Brak dostępu', 'Włącz uprawnienie do mikrofonu.');
+        Alert.alert(t('no_permission_camera_short'), t('no_permission_mic'));
         return;
       }
       await Audio.setAudioModeAsync({
@@ -979,7 +957,7 @@ function AddCustomItem({
       recTimerRef.current = setInterval(() => setRecElapsed((s) => s + 1), 1000);
     } catch (e: any) {
       console.error('startRecording error', e);
-      Alert.alert('Błąd nagrywania', String(e?.message || e));
+      Alert.alert('Recording error', String(e?.message || e));
     }
   }, []);
 
@@ -1046,17 +1024,17 @@ function AddCustomItem({
 
   const onSave = useCallback(async () => {
     if (!imageUri) {
-      Alert.alert('Brakuje zdjęcia', 'Wybierz zdjęcie z galerii lub zrób własne.');
+      Alert.alert(t('no_image_selected'), t('no_image_selected_msg'));
       return;
     }
     if (!label.trim()) {
-      Alert.alert('Brakuje podpisu', 'Wpisz słowo które dziecko ma usłyszeć.');
+      Alert.alert(t('no_caption'), t('no_caption_msg'));
       return;
     }
     if (recordings.length === 0) {
       Alert.alert(
-        'Brakuje nagrania',
-        'Nagraj swój głos żeby było co odtworzyć w trybie dziecka.',
+        t('no_recording'),
+        t('no_recording_msg'),
       );
       return;
     }
@@ -1097,25 +1075,25 @@ function AddCustomItem({
         </View>
         <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 16 }}>
           <TouchableOpacity style={[appStyles.menuBtn, { backgroundColor: '#2196F3', minWidth: 0 }]} onPress={pickImage}>
-            <Text style={appStyles.menuBtnText}>📷 Galeria</Text>
+            <Text style={appStyles.menuBtnText}>{t('pick_gallery')}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={[appStyles.menuBtn, { backgroundColor: '#673AB7', minWidth: 0 }]} onPress={takePhoto}>
-            <Text style={appStyles.menuBtnText}>📸 Zdjęcie</Text>
+            <Text style={appStyles.menuBtnText}>{t('take_photo')}</Text>
           </TouchableOpacity>
         </View>
 
         {/* Label */}
-        <Text style={parentStyles.fieldLabel}>Podpis (co dziecko usłyszy):</Text>
+        <Text style={parentStyles.fieldLabel}>{t('caption_field')}</Text>
         <TextInput
           style={parentStyles.textInput}
           value={label}
           onChangeText={setLabel}
-          placeholder="np. Babcia / Auto / Tata"
+          placeholder={t('caption_placeholder')}
           maxLength={40}
         />
 
         {/* Category picker */}
-        <Text style={parentStyles.fieldLabel}>Kategoria:</Text>
+        <Text style={parentStyles.fieldLabel}>{t('category_field')}</Text>
         <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
           {CATS.map((c) => (
             <TouchableOpacity
@@ -1127,14 +1105,14 @@ function AddCustomItem({
               onPress={() => setCat(c.id)}
             >
               <Text style={[parentStyles.catChipText, cat === c.id && { color: '#fff' }]}>
-                {c.emoji} {state.categoryLabels[c.id]}
+                {c.emoji} {profile.categoryLabels[c.id]}
               </Text>
             </TouchableOpacity>
           ))}
         </View>
 
         {/* Recordings — collapsible */}
-        <Text style={parentStyles.fieldLabel}>Nagrania:</Text>
+        <Text style={parentStyles.fieldLabel}>{t('recordings_field')}</Text>
         {recordings.length > 0 && (
           <>
             <TouchableOpacity
@@ -1143,10 +1121,11 @@ function AddCustomItem({
               activeOpacity={0.7}
             >
               <Text style={parentStyles.expandHeaderText}>
-                🎙 {recordings.length} nagran
-                {recordings.length === 1 ? 'ie' : 'ia'}
+                {recordings.length === 1
+                  ? tn('recordings_summary_one', { n: recordings.length })
+                  : tn('recordings_summary_many', { n: recordings.length })}
                 {selectedId && recordings.find((r) => r.id === selectedId)
-                  ? ` · aktywne: ${recordings.find((r) => r.id === selectedId)!.label}`
+                  ? ` · ${recordings.find((r) => r.id === selectedId)!.label}`
                   : ''}
               </Text>
               <Text style={parentStyles.expandChevron}>{variantsExpanded ? '▾' : '▸'}</Text>
@@ -1180,7 +1159,7 @@ function AddCustomItem({
                           selectedId === r.id && { color: '#fff' },
                         ]}
                       >
-                        {selectedId === r.id ? '✓ wybrane' : 'wybierz'}
+                        {selectedId === r.id ? t('selected') : t('select')}
                       </Text>
                     </TouchableOpacity>
                     <TouchableOpacity
@@ -1210,7 +1189,7 @@ function AddCustomItem({
           onPress={isRecording ? stopRecording : startRecording}
         >
           <Text style={parentStyles.recordBtnText}>
-            {isRecording ? `⏹ Zatrzymaj (${recElapsed}s)` : '🎙 Nagraj wariant'}
+            {isRecording ? tn('record_stop', { s: recElapsed }) : t('record_new_variant')}
           </Text>
         </TouchableOpacity>
 
@@ -1226,7 +1205,7 @@ function AddCustomItem({
           {busy ? (
             <ActivityIndicator color="#fff" />
           ) : (
-            <Text style={appStyles.menuBtnText}>💾 Zapisz fiszkę</Text>
+            <Text style={appStyles.menuBtnText}>{t('save_card')}</Text>
           )}
         </TouchableOpacity>
       </ScrollView>
@@ -1238,16 +1217,9 @@ function AddCustomItem({
    SETTINGS — rename categories + kiosk lock + PIN
 ============================================================ */
 
-function Settings({
-  state,
-  persist,
-  onBack,
-}: {
-  state: PersistedState;
-  persist: (s: PersistedState) => Promise<void>;
-  onBack: () => void;
-}) {
-  const [labels, setLabels] = useState({ ...state.categoryLabels });
+function Settings({ onBack }: { onBack: () => void }) {
+  const { state, persist, profile, t } = useApp();
+  const [labels, setLabels] = useState({ ...profile.categoryLabels });
   const [pin, setPin] = useState(state.pin);
   const [language, setLanguageState] = useState<LanguageCode>(state.language);
 
@@ -1274,10 +1246,10 @@ function Settings({
       </TouchableOpacity>
 
       <ScrollView contentContainerStyle={{ padding: 16, paddingTop: 68 }}>
-        <Text style={[appStyles.title, { fontSize: 20 }]}>Ustawienia</Text>
+        <Text style={[appStyles.title, { fontSize: 20 }]}>{t('settings_title')}</Text>
 
         {/* Language picker */}
-        <Text style={parentStyles.fieldLabel}>🌐 Język aplikacji</Text>
+        <Text style={parentStyles.fieldLabel}>{t('settings_language')}</Text>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
           {SUPPORTED_LANGUAGES.map((l) => {
             const sel = l.code === language;
@@ -1299,12 +1271,12 @@ function Settings({
         </View>
         {language !== state.language && (
           <Text style={{ color: '#FF9800', fontSize: 13, marginTop: 6 }}>
-            ⚠️ Zmiana języka zresetuje nazwy kategorii do ustawień języka.
+            {t('settings_language_warn')}
           </Text>
         )}
 
         {/* PIN */}
-        <Text style={parentStyles.fieldLabel}>🔑 Kod PIN rodzica</Text>
+        <Text style={parentStyles.fieldLabel}>{t('settings_pin_label')}</Text>
         <TextInput
           style={parentStyles.textInput}
           value={pin}
@@ -1317,7 +1289,7 @@ function Settings({
 
         {/* Category names */}
         <Text style={[parentStyles.fieldLabel, { marginTop: 28 }]}>
-          ✏️ Nazwy kategorii
+          {t('settings_categories_label')}
         </Text>
         {CATS.map((c) => (
           <View key={c.id} style={{ marginBottom: 12 }}>
@@ -1340,7 +1312,7 @@ function Settings({
           ]}
           onPress={onSave}
         >
-          <Text style={appStyles.menuBtnText}>💾 Zapisz</Text>
+          <Text style={appStyles.menuBtnText}>{t('save')}</Text>
         </TouchableOpacity>
       </ScrollView>
     </View>

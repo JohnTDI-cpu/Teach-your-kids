@@ -52,16 +52,24 @@ export type CategoryLabels = {
   colors: string;
 };
 
-export type PersistedState = {
+/** Per-language profile — recordings, custom flashcards and category renames
+ *  are isolated per language so a parent who teaches both Polish and English
+ *  can keep separate datasets that don't bleed into each other. */
+export type LanguageProfile = {
   itemOverrides: Record<string, ItemOverrides>;
   customItems: CustomItem[];
   categoryLabels: CategoryLabels;
-  pin: string;
-  kioskEnabled: boolean;
-  language: LanguageCode;
 };
 
-const STORAGE_KEY = 'tyk_state_v1';
+export type PersistedState = {
+  language: LanguageCode;
+  profiles: Record<LanguageCode, LanguageProfile>;
+  pin: string;
+  kioskEnabled: boolean; // ignored at runtime; kept for backward compat
+};
+
+const STORAGE_KEY = 'tyk_state_v2'; // bumped on profile schema migration
+const STORAGE_KEY_V1 = 'tyk_state_v1';
 
 export const DEFAULT_LABELS: CategoryLabels = {
   letters: 'Literki',
@@ -103,25 +111,60 @@ export const CATEGORY_LABELS_BY_LANG: Record<LanguageCode, CategoryLabels> = {
   uk: { letters: 'Літери',   numbers: 'Цифри',   animals: 'Тварини',   colors: 'Кольори' },
 };
 
+function emptyProfile(lang: LanguageCode): LanguageProfile {
+  return {
+    itemOverrides: {},
+    customItems: [],
+    categoryLabels: { ...(CATEGORY_LABELS_BY_LANG[lang] || DEFAULT_LABELS) },
+  };
+}
+
+function defaultProfiles(): Record<LanguageCode, LanguageProfile> {
+  const out = {} as Record<LanguageCode, LanguageProfile>;
+  for (const l of ['pl','en','de','es','fr','it','uk'] as LanguageCode[]) {
+    out[l] = emptyProfile(l);
+  }
+  return out;
+}
+
 const DEFAULT_STATE: PersistedState = {
-  itemOverrides: {},
-  customItems: [],
-  categoryLabels: DEFAULT_LABELS,
+  language: 'pl',
+  profiles: defaultProfiles(),
   pin: '1234',
   kioskEnabled: true,
-  language: 'pl',
 };
 
 export async function loadState(): Promise<PersistedState> {
   try {
     const raw = await AsyncStorage.getItem(STORAGE_KEY);
-    if (!raw) return { ...DEFAULT_STATE };
-    const parsed = JSON.parse(raw);
-    return {
-      ...DEFAULT_STATE,
-      ...parsed,
-      categoryLabels: { ...DEFAULT_LABELS, ...(parsed.categoryLabels || {}) },
-    };
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      return {
+        ...DEFAULT_STATE,
+        ...parsed,
+        profiles: { ...defaultProfiles(), ...(parsed.profiles || {}) },
+      };
+    }
+    // Migrate v1 → v2 (per-language profiles). The v1 data was Polish only.
+    const oldRaw = await AsyncStorage.getItem(STORAGE_KEY_V1);
+    if (oldRaw) {
+      const old = JSON.parse(oldRaw);
+      const profiles = defaultProfiles();
+      profiles.pl = {
+        itemOverrides: old.itemOverrides || {},
+        customItems: old.customItems || [],
+        categoryLabels: { ...DEFAULT_LABELS, ...(old.categoryLabels || {}) },
+      };
+      const migrated: PersistedState = {
+        language: old.language || 'pl',
+        profiles,
+        pin: old.pin || '1234',
+        kioskEnabled: !!old.kioskEnabled,
+      };
+      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(migrated));
+      return migrated;
+    }
+    return { ...DEFAULT_STATE };
   } catch (e) {
     console.warn('loadState failed, using defaults', e);
     return { ...DEFAULT_STATE };
@@ -130,6 +173,22 @@ export async function loadState(): Promise<PersistedState> {
 
 export async function saveState(state: PersistedState): Promise<void> {
   await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+
+/* ---------- profile accessors ---------- */
+
+export function currentProfile(s: PersistedState): LanguageProfile {
+  return s.profiles[s.language] || emptyProfile(s.language);
+}
+
+function patchProfile(s: PersistedState, patch: Partial<LanguageProfile>): PersistedState {
+  return {
+    ...s,
+    profiles: {
+      ...s.profiles,
+      [s.language]: { ...currentProfile(s), ...patch },
+    },
+  };
 }
 
 /**
@@ -160,12 +219,11 @@ export function uuid(): string {
   );
 }
 
-/* ---------- mutators ---------- */
+/* ---------- mutators (operate on the current language profile) ---------- */
 
 export function getOverrides(state: PersistedState, itemId: string): ItemOverrides {
-  return (
-    state.itemOverrides[itemId] || { recordings: [], selectedRecordingId: null }
-  );
+  const p = currentProfile(state);
+  return p.itemOverrides[itemId] || { recordings: [], selectedRecordingId: null };
 }
 
 export function upsertOverride(
@@ -173,14 +231,11 @@ export function upsertOverride(
   itemId: string,
   patch: Partial<ItemOverrides>,
 ): PersistedState {
-  const cur = getOverrides(state, itemId);
-  return {
-    ...state,
-    itemOverrides: {
-      ...state.itemOverrides,
-      [itemId]: { ...cur, ...patch },
-    },
-  };
+  const p = currentProfile(state);
+  const cur = p.itemOverrides[itemId] || { recordings: [], selectedRecordingId: null };
+  return patchProfile(state, {
+    itemOverrides: { ...p.itemOverrides, [itemId]: { ...cur, ...patch } },
+  });
 }
 
 export function addRecordingToBuiltin(
@@ -222,7 +277,8 @@ export function addCustomItem(
   state: PersistedState,
   item: CustomItem,
 ): PersistedState {
-  return { ...state, customItems: [...state.customItems, item] };
+  const p = currentProfile(state);
+  return patchProfile(state, { customItems: [...p.customItems, item] });
 }
 
 export function updateCustomItem(
@@ -230,19 +286,18 @@ export function updateCustomItem(
   id: string,
   patch: Partial<CustomItem>,
 ): PersistedState {
-  return {
-    ...state,
-    customItems: state.customItems.map((it) =>
-      it.id === id ? { ...it, ...patch } : it,
-    ),
-  };
+  const p = currentProfile(state);
+  return patchProfile(state, {
+    customItems: p.customItems.map((it) => (it.id === id ? { ...it, ...patch } : it)),
+  });
 }
 
 export function removeCustomItem(
   state: PersistedState,
   id: string,
 ): PersistedState {
-  return { ...state, customItems: state.customItems.filter((it) => it.id !== id) };
+  const p = currentProfile(state);
+  return patchProfile(state, { customItems: p.customItems.filter((it) => it.id !== id) });
 }
 
 export function setCategoryLabel(
@@ -250,14 +305,19 @@ export function setCategoryLabel(
   cat: CategoryId,
   label: string,
 ): PersistedState {
-  return { ...state, categoryLabels: { ...state.categoryLabels, [cat]: label } };
+  const p = currentProfile(state);
+  return patchProfile(state, {
+    categoryLabels: { ...p.categoryLabels, [cat]: label },
+  });
 }
 
-/** Switch UI/audio language. Resets category labels to that language's
- *  defaults (parent can re-edit afterwards). */
+/** Switch UI/audio language. Each language has its own profile (recordings,
+ *  custom flashcards, category labels) — switching reveals that profile,
+ *  switching back later restores it untouched. */
 export function setLanguage(state: PersistedState, language: LanguageCode): PersistedState {
-  const labels = CATEGORY_LABELS_BY_LANG[language] || DEFAULT_LABELS;
-  return { ...state, language, categoryLabels: { ...labels } };
+  const profiles = { ...state.profiles };
+  if (!profiles[language]) profiles[language] = emptyProfile(language);
+  return { ...state, language, profiles };
 }
 
 /* ---------- merged item view (built-in + custom) ---------- */
@@ -344,8 +404,10 @@ export function buildItemsForCategory(
     return pickLabel(rec);
   };
 
+  const profile = currentProfile(state);
+
   for (const rec of sourceArr) {
-    const ovr = state.itemOverrides[rec.id];
+    const ovr = profile.itemOverrides[rec.id];
     if (ovr?.hidden && !options.includeHidden) continue;
     const selectedRec = ovr?.recordings.find((r) => r.id === ovr.selectedRecordingId);
     const imageSource = ovr?.imageUri
@@ -365,8 +427,8 @@ export function buildItemsForCategory(
     });
   }
 
-  // --- custom items ---
-  for (const ci of state.customItems) {
+  // --- custom items (per-language profile) ---
+  for (const ci of profile.customItems) {
     if (ci.category !== cat) continue;
     const sel = ci.recordings.find((r) => r.id === ci.selectedRecordingId);
     out.push({
@@ -384,17 +446,15 @@ export function buildItemsForCategory(
   return out;
 }
 
-/**
- * Find a recording by id across both built-in overrides and custom items.
- */
+/** Find a recording by id across both built-in overrides and custom items. */
 export function findRecording(
   state: PersistedState,
   itemId: string,
   recId: string,
 ): Recording | null {
-  const isCustom = itemId.startsWith('custom_');
-  if (isCustom) {
-    const ci = state.customItems.find((c) => c.id === itemId);
+  const p = currentProfile(state);
+  if (itemId.startsWith('custom_')) {
+    const ci = p.customItems.find((c) => c.id === itemId);
     return ci?.recordings.find((r) => r.id === recId) ?? null;
   }
   return getOverrides(state, itemId).recordings.find((r) => r.id === recId) ?? null;
@@ -406,14 +466,12 @@ export function addRecording(
   itemId: string,
   rec: Recording,
 ): PersistedState {
+  const p = currentProfile(state);
   if (itemId.startsWith('custom_')) {
+    const ci = p.customItems.find((c) => c.id === itemId);
     return updateCustomItem(state, itemId, {
-      recordings: [
-        ...(state.customItems.find((c) => c.id === itemId)?.recordings ?? []),
-        rec,
-      ],
-      selectedRecordingId:
-        state.customItems.find((c) => c.id === itemId)?.selectedRecordingId ?? rec.id,
+      recordings: [...(ci?.recordings ?? []), rec],
+      selectedRecordingId: ci?.selectedRecordingId ?? rec.id,
     });
   }
   return addRecordingToBuiltin(state, itemId, rec);
@@ -424,14 +482,13 @@ export function removeRecording(
   itemId: string,
   recId: string,
 ): PersistedState {
+  const p = currentProfile(state);
   if (itemId.startsWith('custom_')) {
-    const ci = state.customItems.find((c) => c.id === itemId);
+    const ci = p.customItems.find((c) => c.id === itemId);
     if (!ci) return state;
     const recordings = ci.recordings.filter((r) => r.id !== recId);
     let selectedRecordingId = ci.selectedRecordingId;
-    if (selectedRecordingId === recId) {
-      selectedRecordingId = recordings[0]?.id ?? null;
-    }
+    if (selectedRecordingId === recId) selectedRecordingId = recordings[0]?.id ?? null;
     return updateCustomItem(state, itemId, { recordings, selectedRecordingId });
   }
   return removeRecordingFromBuiltin(state, itemId, recId);
@@ -452,12 +509,10 @@ export function getRecordingsFor(
   state: PersistedState,
   itemId: string,
 ): { recordings: Recording[]; selectedId: string | null } {
+  const p = currentProfile(state);
   if (itemId.startsWith('custom_')) {
-    const ci = state.customItems.find((c) => c.id === itemId);
-    return {
-      recordings: ci?.recordings ?? [],
-      selectedId: ci?.selectedRecordingId ?? null,
-    };
+    const ci = p.customItems.find((c) => c.id === itemId);
+    return { recordings: ci?.recordings ?? [], selectedId: ci?.selectedRecordingId ?? null };
   }
   const ovr = getOverrides(state, itemId);
   return { recordings: ovr.recordings, selectedId: ovr.selectedRecordingId };
@@ -515,15 +570,16 @@ export function unhideItem(
   return upsertOverride(state, itemId, { hidden: false });
 }
 
-/** Restore built-in to its default (clears all overrides). */
+/** Restore built-in to its default (clears all overrides for current profile). */
 export function resetItemToDefault(
   state: PersistedState,
   itemId: string,
 ): PersistedState {
   if (itemId.startsWith('custom_')) return state;
-  const next = { ...state.itemOverrides };
+  const p = currentProfile(state);
+  const next = { ...p.itemOverrides };
   delete next[itemId];
-  return { ...state, itemOverrides: next };
+  return patchProfile(state, { itemOverrides: next });
 }
 
 /* ---------- file deletion helper ---------- */

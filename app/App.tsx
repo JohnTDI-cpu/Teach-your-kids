@@ -26,10 +26,12 @@ import {
   buildItemsForCategory,
   MergedItem,
 } from './state';
+import { AppProvider, useApp } from './AppContext';
 import { ParentApp } from './ParentApp';
 
-/** Rainbow palette used to colour individual falling letters. */
-const RAINBOW = ['#FF3B30', '#FF9500', '#FFCC00', '#34C759', '#00B8D9', '#AF52DE', '#FF2D92'];
+/** Rainbow palette for falling letters. Yellow/orange dropped because the
+ *  flashcard background is cream-yellow (#ffdb58) and they'd vanish into it. */
+const RAINBOW = ['#E11D48', '#1D4ED8', '#9333EA', '#0891B2', '#16A34A', '#DB2777', '#7C3AED'];
 
 /** App-wide font names — loaded by the root component. */
 const FONT_BOLD = 'Fredoka_700Bold';
@@ -79,23 +81,19 @@ function resolveImageSource(item: MergedItem): any {
    FLASHCARD — child mode
 ============================================================ */
 
-type FlashcardProps = {
-  category: CategoryId;
-  state: PersistedState;
-  onBack: () => void;
-};
-
-function FlashcardGame({ category, state, onBack }: FlashcardProps) {
+function FlashcardGame({ category, onBack }: { category: CategoryId; onBack: () => void }) {
+  const { state, lang, t } = useApp();
   const { width, height, isLandscape, rs } = useDevice();
 
   const items = useMemo(
-    () => buildItemsForCategory(category, state, state.language),
-    [category, state],
+    () => buildItemsForCategory(category, state, lang),
+    [category, state, lang],
   );
 
   const [currentItem, setCurrentItem] = useState<MergedItem | null>(null);
   const [isAudioPlaying, setIsAudioPlaying] = useState(false);
   const soundRef = useRef<Audio.Sound | null>(null);
+  const audioFallbackRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastIndexRef = useRef<number>(-1);
 
   const scaleAnim = useRef(new Animated.Value(1)).current;
@@ -168,27 +166,42 @@ function FlashcardGame({ category, state, onBack }: FlashcardProps) {
     [scaleAnim, charsAnim],
   );
 
+  const clearAudioFallback = () => {
+    if (audioFallbackRef.current) {
+      clearTimeout(audioFallbackRef.current);
+      audioFallbackRef.current = null;
+    }
+  };
+
   const playAudioFor = useCallback(async (item: MergedItem) => {
     if (soundRef.current) {
       try { await soundRef.current.unloadAsync(); } catch {}
       soundRef.current = null;
     }
+    clearAudioFallback();
     const resolved = resolveAudioSource(item);
     if (!resolved) { setIsAudioPlaying(false); return; }
     setIsAudioPlaying(true);
     try {
       const { sound } = await Audio.Sound.createAsync(resolved.source, { shouldPlay: true });
       soundRef.current = sound;
+      // Watchdog: malformed mp3 / driver hiccup could mean didJustFinish
+      // never fires. Release the gate after 9 s so the kid can move on.
+      audioFallbackRef.current = setTimeout(() => {
+        setIsAudioPlaying(false);
+        audioFallbackRef.current = null;
+      }, 9000);
       sound.setOnPlaybackStatusUpdate((status: AVPlaybackStatus) => {
         if (!status.isLoaded) {
-          if ((status as any).error) setIsAudioPlaying(false);
+          if ((status as any).error) { setIsAudioPlaying(false); clearAudioFallback(); }
           return;
         }
-        if (status.didJustFinish) setIsAudioPlaying(false);
+        if (status.didJustFinish) { setIsAudioPlaying(false); clearAudioFallback(); }
       });
     } catch (e) {
       console.warn('audio play error', e);
       setIsAudioPlaying(false);
+      clearAudioFallback();
     }
   }, []);
 
@@ -226,9 +239,9 @@ function FlashcardGame({ category, state, onBack }: FlashcardProps) {
   if (!currentItem) {
     return (
       <View style={[styles.container, { backgroundColor: '#ffdb58' }]}>
-        <Text style={styles.title}>Brak materiałów w tej kategorii.</Text>
+        <Text style={styles.title}>{t('no_items_in_cat')}</Text>
         <TouchableOpacity style={styles.menuBtn} onPress={onBack}>
-          <Text style={styles.menuBtnText}>Wróć</Text>
+          <Text style={styles.menuBtnText}>{t('back')}</Text>
         </TouchableOpacity>
       </View>
     );
@@ -236,12 +249,13 @@ function FlashcardGame({ category, state, onBack }: FlashcardProps) {
 
   const isColor = currentItem.category === 'colors';
   const cardImage = resolveImageSource(currentItem);
-  const containerBg = isColor ? currentItem.hex || '#ffdb58' : '#ffdb58';
+  // Background stays normal even for colors — the colour itself fills the card.
+  const containerBg = '#ffdb58';
 
   return (
     <View style={[styles.container, { backgroundColor: containerBg }]}>
       <TouchableOpacity style={styles.backBtn} onPress={onBack}>
-        <Text style={styles.backBtnText}>↩ Wróć</Text>
+        <Text style={styles.backBtnText}>{t('back')}</Text>
       </TouchableOpacity>
 
       <View style={styles.textContainer} pointerEvents="none">
@@ -256,11 +270,10 @@ function FlashcardGame({ category, state, onBack }: FlashcardProps) {
               </Text>
             );
           }
-          // For colors we use white text + dark shadow so it stays readable on
-          // any hex background; for everything else we cycle the rainbow.
-          const colorOverride = isColor
-            ? { color: '#ffffff', textShadowColor: 'rgba(0,0,0,0.55)', textShadowRadius: 6 }
-            : { color: RAINBOW[index % RAINBOW.length] };
+          // Rainbow letters everywhere — including the colour category.
+          // The colour itself only fills the card now, the background is the
+          // shared cream-yellow so letters stay legible with their shadow.
+          const colorOverride = { color: RAINBOW[index % RAINBOW.length] };
           const rotate = a.rot.interpolate({
             inputRange: [-1, 1],
             outputRange: ['-30deg', '30deg'],
@@ -308,9 +321,9 @@ function FlashcardGame({ category, state, onBack }: FlashcardProps) {
 
       <View style={styles.gateBar} pointerEvents="none">
         {isAudioPlaying ? (
-          <Text style={styles.gateText}>🔊 Słuchaj…</Text>
+          <Text style={styles.gateText}>{t('gate_listen')}</Text>
         ) : (
-          <Text style={styles.gateTextReady}>👆 Stuknij — kolejny obrazek</Text>
+          <Text style={styles.gateTextReady}>{t('gate_tap')}</Text>
         )}
       </View>
     </View>
@@ -321,12 +334,6 @@ function FlashcardGame({ category, state, onBack }: FlashcardProps) {
    CHILD MENU — category selection
 ============================================================ */
 
-type ChildMenuProps = {
-  state: PersistedState;
-  onSelect: (cat: CategoryId) => void;
-  onBack: () => void;
-};
-
 const TILE_DEFS: { id: CategoryId; defaultIcon: string; color: string; menuAsset?: string }[] = [
   { id: 'letters', defaultIcon: 'A',  color: '#FF5722', menuAsset: 'bg_letters.webp' },
   { id: 'numbers', defaultIcon: '1',  color: '#2196F3', menuAsset: 'bg_numbers.webp' },
@@ -334,7 +341,8 @@ const TILE_DEFS: { id: CategoryId; defaultIcon: string; color: string; menuAsset
   { id: 'colors',  defaultIcon: '🎨', color: '#E91E63', menuAsset: 'bg_colors.webp' },
 ];
 
-function ChildMenu({ state, onSelect, onBack }: ChildMenuProps) {
+function ChildMenu({ onSelect, onBack }: { onSelect: (cat: CategoryId) => void; onBack: () => void }) {
+  const { profile, t } = useApp();
   const { width, height, isLandscape, rs } = useDevice();
   const mainBg = MenuAssets['bg_main.webp'];
 
@@ -356,23 +364,23 @@ function ChildMenu({ state, onSelect, onBack }: ChildMenuProps) {
     >
       <View style={styles.dimOverlay} />
       <TouchableOpacity style={styles.backBtn} onPress={onBack}>
-        <Text style={styles.backBtnText}>↩ Wyjdź (PIN)</Text>
+        <Text style={styles.backBtnText}>{t('pin_exit_label')}</Text>
       </TouchableOpacity>
 
       <Text style={[styles.title, { fontSize: titleSize, color: '#fff', textShadowColor: 'rgba(0,0,0,0.5)', textShadowRadius: 8, marginBottom: 8 }]}>
-        Czego się uczymy? 🎈
+        {t('child_title')}
       </Text>
 
       <View style={[styles.gridContainer, { gap: isLandscape ? 16 : 12 }]}>
-        {TILE_DEFS.map((t) => {
-          const tileBg = t.menuAsset ? MenuAssets[t.menuAsset] : null;
-          const label = state.categoryLabels[t.id];
+        {TILE_DEFS.map((tile) => {
+          const tileBg = tile.menuAsset ? MenuAssets[tile.menuAsset] : null;
+          const label = profile.categoryLabels[tile.id];
           return (
             <TouchableOpacity
-              key={t.id}
-              style={[styles.categoryBtn, { backgroundColor: t.color, width: tileW, height: tileH }]}
+              key={tile.id}
+              style={[styles.categoryBtn, { backgroundColor: tile.color, width: tileW, height: tileH }]}
               activeOpacity={0.85}
-              onPress={() => onSelect(t.id)}
+              onPress={() => onSelect(tile.id)}
             >
               {tileBg ? (
                 <ImageBackground
@@ -382,12 +390,12 @@ function ChildMenu({ state, onSelect, onBack }: ChildMenuProps) {
                   resizeMode="cover"
                 >
                   <View style={styles.tileScrim} />
-                  <Text style={[styles.categoryIcon, styles.tileText, { fontSize: iconSize }]}>{t.defaultIcon}</Text>
+                  <Text style={[styles.categoryIcon, styles.tileText, { fontSize: iconSize }]}>{tile.defaultIcon}</Text>
                   <Text style={[styles.categoryText, styles.tileText, { fontSize: catTextSize }]}>{label}</Text>
                 </ImageBackground>
               ) : (
                 <View style={styles.tileBg}>
-                  <Text style={[styles.categoryIcon, { fontSize: iconSize }]}>{t.defaultIcon}</Text>
+                  <Text style={[styles.categoryIcon, { fontSize: iconSize }]}>{tile.defaultIcon}</Text>
                   <Text style={[styles.categoryText, { fontSize: catTextSize }]}>{label}</Text>
                 </View>
               )}
@@ -403,21 +411,13 @@ function ChildMenu({ state, onSelect, onBack }: ChildMenuProps) {
    ROOT — navigation + PIN gate + state bootstrapping
 ============================================================ */
 
+/* ============================================================
+   ROOT — state loading + AppProvider
+============================================================ */
+
 export default function App() {
-  const { width, height, isLandscape, rs } = useDevice();
-
-  const [fontsLoaded] = useFonts({
-    Fredoka_500Medium,
-    Fredoka_700Bold,
-  });
-
-  const [screen, setScreen] = useState<'menu' | 'child_menu' | 'flashcard' | 'parent'>('menu');
-  const [selectedCategory, setSelectedCategory] = useState<CategoryId>('animals');
   const [state, setState] = useState<PersistedState | null>(null);
-  const [showPinDialog, setShowPinDialog] = useState(false);
-  const [pinInput, setPinInput] = useState('');
-  const [targetScreenAfterPin, setTargetScreenAfterPin] =
-    useState<'menu' | 'parent'>('menu');
+  const [fontsLoaded] = useFonts({ Fredoka_500Medium, Fredoka_700Bold });
 
   useEffect(() => {
     (async () => {
@@ -435,9 +435,49 @@ export default function App() {
     })();
   }, []);
 
+  const persist = useCallback(async (next: PersistedState) => {
+    setState(next);
+    try { await saveState(next); } catch (e) { console.warn('saveState', e); }
+  }, []);
+
+  if (!state || !fontsLoaded) {
+    return (
+      <View style={[styles.container, { backgroundColor: '#ffdb58' }]}>
+        <Text style={styles.title}>Loading…</Text>
+      </View>
+    );
+  }
+
+  return (
+    <AppProvider state={state} persist={persist}>
+      <RootScreens />
+    </AppProvider>
+  );
+}
+
+/* ============================================================
+   ROOT SCREENS — navigation + PIN gate (inside AppProvider)
+============================================================ */
+
+function RootScreens() {
+  const { state, t } = useApp();
+  const { width, isLandscape, rs } = useDevice();
+
+  const [screen, setScreen] = useState<'menu' | 'child_menu' | 'flashcard' | 'parent'>('menu');
+  const [selectedCategory, setSelectedCategory] = useState<CategoryId>('animals');
+  const [showPinDialog, setShowPinDialog] = useState(false);
+  const [pinInput, setPinInput] = useState('');
+  const [targetScreenAfterPin, setTargetScreenAfterPin] =
+    useState<'menu' | 'parent'>('menu');
+
+  const handleExitChildModeRequest = useCallback(() => {
+    setTargetScreenAfterPin('menu');
+    setPinInput('');
+    setShowPinDialog(true);
+  }, []);
+
   // Hardware back button: blocked in child screens, used as in-app
-  // navigation everywhere else. The kiosk lock-task feature has been removed
-  // — fullscreen comes from MainActivity.applyImmersiveMode() now.
+  // navigation everywhere else.
   useEffect(() => {
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
       if (showPinDialog) { setShowPinDialog(false); setPinInput(''); return true; }
@@ -447,21 +487,9 @@ export default function App() {
       return false; // root menu → allow system back to leave the app
     });
     return () => sub.remove();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [screen, showPinDialog]);
-
-  const persist = useCallback(async (next: PersistedState) => {
-    setState(next);
-    try { await saveState(next); } catch (e) { console.warn('saveState', e); }
-  }, []);
+  }, [screen, showPinDialog, handleExitChildModeRequest]);
 
   const handleEnterChildMode = () => setScreen('child_menu');
-
-  const handleExitChildModeRequest = () => {
-    setTargetScreenAfterPin('menu');
-    setPinInput('');
-    setShowPinDialog(true);
-  };
 
   const handleParentModeRequest = () => {
     setTargetScreenAfterPin('parent');
@@ -470,32 +498,23 @@ export default function App() {
   };
 
   const verifyPinAndProceed = () => {
-    if (!state) return;
     if (pinInput === state.pin) {
       setShowPinDialog(false);
       setPinInput('');
       setScreen(targetScreenAfterPin);
     } else {
-      Alert.alert('Błędny PIN', 'Spróbuj ponownie.');
+      Alert.alert(t('pin_wrong'), t('pin_wrong_msg'));
       setPinInput('');
     }
   };
-
-  if (!state || !fontsLoaded) {
-    return (
-      <View style={[styles.container, { backgroundColor: '#ffdb58' }]}>
-        <Text style={styles.title}>Wczytuję…</Text>
-      </View>
-    );
-  }
 
   if (showPinDialog) {
     const dlgW = Math.min(width * 0.7, 420);
     return (
       <View style={[styles.container, { backgroundColor: '#ffdb58' }]}>
         <View style={[styles.pinDialog, { width: dlgW }]}>
-          <Text style={[styles.pinTitle, { fontSize: rs(22, 28) }]}>Wpisz kod PIN rodzica</Text>
-          <Text style={styles.pinSubtitle}>(Domyślny: 1234)</Text>
+          <Text style={[styles.pinTitle, { fontSize: rs(22, 28) }]}>{t('pin_title')}</Text>
+          <Text style={styles.pinSubtitle}>{t('pin_subtitle')}</Text>
           <TextInput
             style={[styles.pinInput, { fontSize: rs(32, 40) }]}
             keyboardType="number-pad"
@@ -510,13 +529,13 @@ export default function App() {
               style={[styles.menuBtn, { backgroundColor: '#ccc', minWidth: 100, paddingVertical: 8 }]}
               onPress={() => setShowPinDialog(false)}
             >
-              <Text style={[styles.menuBtnText, { color: '#333', fontSize: rs(16, 20) }]}>Anuluj</Text>
+              <Text style={[styles.menuBtnText, { color: '#333', fontSize: rs(16, 20) }]}>{t('cancel')}</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.menuBtn, { backgroundColor: '#4CAF50', minWidth: 100, paddingVertical: 8 }]}
               onPress={verifyPinAndProceed}
             >
-              <Text style={[styles.menuBtnText, { fontSize: rs(16, 20) }]}>OK</Text>
+              <Text style={[styles.menuBtnText, { fontSize: rs(16, 20) }]}>{t('ok')}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -527,7 +546,6 @@ export default function App() {
   if (screen === 'child_menu') {
     return (
       <ChildMenu
-        state={state}
         onSelect={(cat) => { setSelectedCategory(cat); setScreen('flashcard'); }}
         onBack={handleExitChildModeRequest}
       />
@@ -538,14 +556,13 @@ export default function App() {
     return (
       <FlashcardGame
         category={selectedCategory}
-        state={state}
         onBack={() => setScreen('child_menu')}
       />
     );
   }
 
   if (screen === 'parent') {
-    return <ParentApp state={state} persist={persist} onExit={() => setScreen('menu')} />;
+    return <ParentApp onExit={() => setScreen('menu')} />;
   }
 
   // MAIN MENU
@@ -564,10 +581,10 @@ export default function App() {
     >
       <View style={styles.dimOverlay} />
       <Text style={[styles.title, { fontSize: menuTitleSize, color: '#fff', textShadowColor: 'rgba(0,0,0,0.5)', textShadowRadius: 10 }]}>
-        Witaj w Teach Your Kids! 🚀
+        {t('main_welcome')}
       </Text>
       <Text style={[styles.subtitle, { fontSize: menuSubSize, color: '#fff', marginBottom: isLandscape ? 16 : 24 }]}>
-        Kto korzysta z tabletu?
+        {t('main_who')}
       </Text>
 
       <View style={[styles.menuRow, { flexDirection: menuDirection, gap: isLandscape ? 28 : 20 }]}>
@@ -585,7 +602,7 @@ export default function App() {
           ) : (
             <Text style={[styles.bigMenuEmoji, { fontSize: rs(60, 80) }]}>👶</Text>
           )}
-          <Text style={[styles.menuBtnText, { fontSize: btnTextSize }]}>Dziecko</Text>
+          <Text style={[styles.menuBtnText, { fontSize: btnTextSize }]}>{t('main_child')}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -602,7 +619,7 @@ export default function App() {
           ) : (
             <Text style={[styles.bigMenuEmoji, { fontSize: rs(60, 80) }]}>👩‍💻</Text>
           )}
-          <Text style={[styles.menuBtnText, { fontSize: btnTextSize }]}>Rodzic</Text>
+          <Text style={[styles.menuBtnText, { fontSize: btnTextSize }]}>{t('main_parent')}</Text>
         </TouchableOpacity>
       </View>
     </ImageBackground>
