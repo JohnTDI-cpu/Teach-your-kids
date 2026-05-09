@@ -74,6 +74,9 @@ import {
   deleteItem,
   unhideItem,
   resetItemToDefault,
+  setLanguage,
+  SUPPORTED_LANGUAGES,
+  LanguageCode,
 } from './state';
 import { styles as appStyles, useDevice } from './App';
 
@@ -168,7 +171,7 @@ export function ParentApp({ state, persist, onExit }: Props) {
       <View style={[appStyles.gridContainer, { gap: isLandscape ? 16 : 12 }]}>
         {CATS.map((c) => {
           const label = state.categoryLabels[c.id];
-          const count = buildItemsForCategory(c.id, state, 'pl').length;
+          const count = buildItemsForCategory(c.id, state, state.language).length;
           return (
             <TouchableOpacity
               key={c.id}
@@ -223,7 +226,7 @@ function CategoryView({
   onAddCustom: () => void;
 }) {
   const { rs } = useDevice();
-  const items = useMemo(() => buildItemsForCategory(cat, state, 'pl', { includeHidden: true }), [cat, state]);
+  const items = useMemo(() => buildItemsForCategory(cat, state, state.language, { includeHidden: true }), [cat, state]);
   const label = state.categoryLabels[cat];
 
   const onLongPressDelete = useCallback(
@@ -347,7 +350,7 @@ function ItemEditor({
   onBack: () => void;
 }) {
   const item = useMemo(() => {
-    const all = buildItemsForCategory(cat, state, 'pl', { includeHidden: true });
+    const all = buildItemsForCategory(cat, state, state.language, { includeHidden: true });
     return all.find((x) => x.id === itemId);
   }, [cat, state, itemId]);
 
@@ -1247,13 +1250,19 @@ function Settings({
   const [labels, setLabels] = useState({ ...state.categoryLabels });
   const [kioskEnabled, setKioskEnabled] = useState(state.kioskEnabled);
   const [pin, setPin] = useState(state.pin);
+  const [language, setLanguageState] = useState<LanguageCode>(state.language);
 
   const onSave = async () => {
     let next = state;
-    (Object.keys(labels) as CategoryId[]).forEach((cat) => {
-      const v = (labels[cat] || '').trim();
-      if (v) next = setCategoryLabel(next, cat, v);
-    });
+    if (language !== state.language) {
+      next = setLanguage(next, language);
+      // setLanguage already reset categoryLabels to lang defaults; keep them.
+    } else {
+      (Object.keys(labels) as CategoryId[]).forEach((cat) => {
+        const v = (labels[cat] || '').trim();
+        if (v) next = setCategoryLabel(next, cat, v);
+      });
+    }
     next = { ...next, kioskEnabled, pin: pin.trim() || '1234' };
     await persist(next);
     onBack();
@@ -1267,6 +1276,33 @@ function Settings({
 
       <ScrollView contentContainerStyle={{ padding: 16, paddingTop: 68 }}>
         <Text style={[appStyles.title, { fontSize: 20 }]}>Ustawienia</Text>
+
+        {/* Language picker */}
+        <Text style={parentStyles.fieldLabel}>🌐 Język aplikacji</Text>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+          {SUPPORTED_LANGUAGES.map((l) => {
+            const sel = l.code === language;
+            return (
+              <TouchableOpacity
+                key={l.code}
+                style={[
+                  parentStyles.catChip,
+                  sel && { backgroundColor: '#2196F3', borderColor: '#2196F3' },
+                ]}
+                onPress={() => setLanguageState(l.code)}
+              >
+                <Text style={[parentStyles.catChipText, sel && { color: '#fff' }]}>
+                  {l.flag}  {l.name}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+        {language !== state.language && (
+          <Text style={{ color: '#FF9800', fontSize: 13, marginTop: 6 }}>
+            ⚠️ Zmiana języka zresetuje nazwy kategorii do ustawień języka.
+          </Text>
+        )}
 
         {/* Kiosk lock */}
         <Text style={parentStyles.fieldLabel}>🔒 Blokada ekranu (kiosk)</Text>

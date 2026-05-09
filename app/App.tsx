@@ -84,7 +84,7 @@ function FlashcardGame({ category, state, onBack }: FlashcardProps) {
   const { width, height, isLandscape, rs } = useDevice();
 
   const items = useMemo(
-    () => buildItemsForCategory(category, state, 'pl'),
+    () => buildItemsForCategory(category, state, state.language),
     [category, state],
   );
 

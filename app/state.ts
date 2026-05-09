@@ -7,6 +7,17 @@ import * as FileSystem from 'expo-file-system/legacy';
 import contentData from './assets/content_data.json';
 
 export type CategoryId = 'letters' | 'numbers' | 'animals' | 'colors';
+export type LanguageCode = 'pl' | 'en' | 'de' | 'es' | 'fr' | 'it' | 'uk';
+
+export const SUPPORTED_LANGUAGES: { code: LanguageCode; flag: string; name: string }[] = [
+  { code: 'pl', flag: '🇵🇱', name: 'Polski' },
+  { code: 'en', flag: '🇬🇧', name: 'English' },
+  { code: 'de', flag: '🇩🇪', name: 'Deutsch' },
+  { code: 'es', flag: '🇪🇸', name: 'Español' },
+  { code: 'fr', flag: '🇫🇷', name: 'Français' },
+  { code: 'it', flag: '🇮🇹', name: 'Italiano' },
+  { code: 'uk', flag: '🇺🇦', name: 'Українська' },
+];
 
 export type Recording = {
   id: string;          // uuid
@@ -47,6 +58,7 @@ export type PersistedState = {
   categoryLabels: CategoryLabels;
   pin: string;
   kioskEnabled: boolean;
+  language: LanguageCode;
 };
 
 const STORAGE_KEY = 'tyk_state_v1';
@@ -58,12 +70,46 @@ export const DEFAULT_LABELS: CategoryLabels = {
   colors: 'Kolory',
 };
 
+/** Caption template for letter items (e.g. "A jak Arbuz" / "A is for Apple"). */
+export const LETTER_TEMPLATES: Record<LanguageCode, (l: string, w: string) => string> = {
+  pl: (l, w) => `${l} jak ${w}`,
+  en: (l, w) => `${l} is for ${w}`,
+  de: (l, w) => `${l} wie ${w}`,
+  es: (l, w) => `${l} de ${w}`,
+  fr: (l, w) => `${l} comme ${w}`,
+  it: (l, w) => `${l} come ${w}`,
+  uk: (l, w) => `${l} як ${w}`,
+};
+
+/** "Krowa mówi" / "The cow says" — used as caption under the animal image. */
+export const ANIMAL_INTRO_TEMPLATES: Record<LanguageCode, (animal: string) => string> = {
+  pl: (a) => `${a} mówi`,
+  en: (a) => `The ${a.toLowerCase()} says`,
+  de: (a) => `${a} macht`,
+  es: (a) => `${a} dice`,
+  fr: (a) => `${a} fait`,
+  it: (a) => `${a} fa`,
+  uk: (a) => `${a} говорить`,
+};
+
+/** Per-language category names shown in the child menu. */
+export const CATEGORY_LABELS_BY_LANG: Record<LanguageCode, CategoryLabels> = {
+  pl: { letters: 'Literki',  numbers: 'Cyfry',   animals: 'Zwierzęta', colors: 'Kolory' },
+  en: { letters: 'Letters',  numbers: 'Numbers', animals: 'Animals',   colors: 'Colors' },
+  de: { letters: 'Buchstaben', numbers: 'Zahlen', animals: 'Tiere',    colors: 'Farben' },
+  es: { letters: 'Letras',   numbers: 'Números', animals: 'Animales',  colors: 'Colores' },
+  fr: { letters: 'Lettres',  numbers: 'Chiffres', animals: 'Animaux',  colors: 'Couleurs' },
+  it: { letters: 'Lettere',  numbers: 'Numeri',  animals: 'Animali',   colors: 'Colori' },
+  uk: { letters: 'Літери',   numbers: 'Цифри',   animals: 'Тварини',   colors: 'Кольори' },
+};
+
 const DEFAULT_STATE: PersistedState = {
   itemOverrides: {},
   customItems: [],
   categoryLabels: DEFAULT_LABELS,
   pin: '1234',
   kioskEnabled: true,
+  language: 'pl',
 };
 
 export async function loadState(): Promise<PersistedState> {
@@ -207,6 +253,13 @@ export function setCategoryLabel(
   return { ...state, categoryLabels: { ...state.categoryLabels, [cat]: label } };
 }
 
+/** Switch UI/audio language. Resets category labels to that language's
+ *  defaults (parent can re-edit afterwards). */
+export function setLanguage(state: PersistedState, language: LanguageCode): PersistedState {
+  const labels = CATEGORY_LABELS_BY_LANG[language] || DEFAULT_LABELS;
+  return { ...state, language, categoryLabels: { ...labels } };
+}
+
 /* ---------- merged item view (built-in + custom) ---------- */
 
 export type MergedItem = {
@@ -229,47 +282,67 @@ export type MergedItem = {
   raw?: any;
 };
 
+/**
+ * Build merged items for a category in the requested language.
+ *
+ * The bundled content_data.json now exposes a multi-language schema:
+ *   letters: { pl: [...], en: [...], de: [...], ... }
+ *   numbers/colors/animals: each entry has `audio: {pl, en, ...}` and
+ *   `labels: {pl, en, ...}`.
+ *
+ * For letters we honour the per-language list (alphabet differs per lang).
+ * For numbers/colors/animals the entries are shared across languages —
+ * only the audio/label changes.
+ */
 export function buildItemsForCategory(
   cat: CategoryId,
   state: PersistedState,
-  language: 'pl' | 'en' = 'pl',
+  language: LanguageCode = 'pl',
   options: { includeHidden?: boolean } = {},
 ): MergedItem[] {
   const out: MergedItem[] = [];
 
-  const pickAudio = (rec: any): string | null => {
+  const pickLabel = (rec: any, fallback?: string): string => {
+    if (rec?.labels?.[language]) return rec.labels[language];
+    if (rec?.labels?.pl) return rec.labels.pl;
+    return fallback ?? '';
+  };
+
+  // For letters we read content_data.letters[lang]; for everything else
+  // a single shared array.
+  let sourceArr: any[] = [];
+  if (cat === 'letters') {
+    const letters = (contentData as any).letters || {};
+    sourceArr = letters[language] || letters.pl || [];
+  } else {
+    sourceArr = (contentData as any)[cat] || [];
+  }
+
+  const pickAudioKey = (rec: any): string | null => {
     if (cat === 'letters') return rec.audio || null;
-    return language === 'pl'
-      ? rec.audio_pl || rec.audio || null
-      : rec.audio_en || rec.audio || null;
+    if (rec.audio && typeof rec.audio === 'object') {
+      return rec.audio[language] || rec.audio.pl || null;
+    }
+    return rec.audio || null;
   };
 
   const pickPrimary = (rec: any): string => {
     if (cat === 'letters') return rec.letter || '';
-    return language === 'pl' ? rec.pl || rec.letter || '' : rec.en || rec.letter || '';
+    if (cat === 'numbers') return rec.id?.replace('numbers_', '') || pickLabel(rec);
+    return pickLabel(rec);
   };
 
   const pickCaption = (rec: any): string => {
-    if (cat === 'animals') {
-      return language === 'pl'
-        ? `${rec.pl} mówi ${rec.sound_pl}`
-        : `${rec.en} says ${rec.sound_en}`;
-    }
     if (cat === 'letters') {
-      return language === 'pl'
-        ? `${rec.letter} jak ${rec.word}`
-        : `${rec.letter} is for ${rec.word}`;
+      const t = LETTER_TEMPLATES[language] || LETTER_TEMPLATES.pl;
+      return t(rec.letter, rec.word);
     }
-    return language === 'pl' ? rec.pl || '' : rec.en || rec.pl || '';
+    if (cat === 'animals') {
+      const t = ANIMAL_INTRO_TEMPLATES[language] || ANIMAL_INTRO_TEMPLATES.pl;
+      return t(pickLabel(rec));
+    }
+    return pickLabel(rec);
   };
-
-  // --- built-ins ---
-  const sourceArr =
-    cat === 'letters'
-      ? language === 'pl'
-        ? (contentData as any).letters_pl
-        : (contentData as any).letters_en
-      : (contentData as any)[cat] || [];
 
   for (const rec of sourceArr) {
     const ovr = state.itemOverrides[rec.id];
@@ -286,7 +359,7 @@ export function buildItemsForCategory(
       caption: ovr?.customCaption?.trim() || pickCaption(rec),
       imageSource,
       customAudioUri: selectedRec?.uri ?? null,
-      builtinAudioKey: selectedRec ? null : pickAudio(rec),
+      builtinAudioKey: selectedRec ? null : pickAudioKey(rec),
       hex: rec.hex,
       raw: rec,
     });

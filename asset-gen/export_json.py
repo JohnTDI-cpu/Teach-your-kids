@@ -1,61 +1,85 @@
+"""
+Export content_data.py → app/assets/content_data.json (multi-language).
+
+Output structure (consumed by app/state.ts buildItemsForCategory):
+  {
+    "languages": ["pl","en","de","es","fr","it","uk"],
+    "letters": {
+      "pl": [{id, filename, audio, letter, word, desc}, ...],
+      "en": [...], ...
+    },
+    "numbers": [{id, filename, audio:{pl,en,de,...}, labels:{pl,en,...}}, ...],
+    "colors":  [{id, hex, audio:{...}, labels:{...}}, ...],
+    "animals": [{id, filename, audio:{...}, labels:{...}}, ...]
+  }
+"""
 import json
 import os
 import sys
 
 sys.path.insert(0, os.path.dirname(__file__))
-from content_data import ANIMALS, LETTERS_PL, LETTERS_EN, NUMBERS, COLORS
+from content_data import ANIMALS, LETTERS, NUMBERS, COLORS, LANGUAGES
 
 data = {
-    "animals": [],
-    "letters_pl": [],
-    "letters_en": [],
+    "languages": LANGUAGES,
+    "letters": {},
     "numbers": [],
-    "colors": []
+    "colors": [],
+    "animals": [],
 }
 
-for k, v in ANIMALS.items():
-    data["animals"].append({
-        "id": f"animals_{k}",
-        "filename": f"animals/{k}.webp",
-        "audio_pl": f"pl/animal_{k}.mp3",
-        "audio_en": f"en/animal_{k}.mp3",
-        **v
-    })
+# Letters — per-language list (alphabet differs per language)
+for lang, items in LETTERS.items():
+    out = []
+    for k, v in items.items():
+        word_safe = v["word"].lower().replace(" ", "_")
+        out.append({
+            "id": f"letters_{lang}_{k}",
+            "filename": f"letters/{lang}/{k}_{word_safe}.webp",
+            "audio": f"{lang}/letter_{k}.mp3",
+            "letter": v["letter"],
+            "word": v["word"],
+            "desc": v["desc"],
+        })
+    data["letters"][lang] = out
 
-for k, v in LETTERS_PL.items():
-    data["letters_pl"].append({
-        "id": f"letters_pl_{k}",
-        "filename": f"letters/pl/{k}_{v['word'].lower()}.webp",
-        "audio": f"pl/letter_{k}.mp3",
-        **v
-    })
-
-for k, v in LETTERS_EN.items():
-    data["letters_en"].append({
-        "id": f"letters_en_{k}",
-        "filename": f"letters/en/{k}_{v['word'].lower()}.webp",
-        "audio": f"en/letter_{k}.mp3",
-        **v
-    })
-
+# Numbers — shared image, per-language audio + label
 for k, v in NUMBERS.items():
     data["numbers"].append({
         "id": f"numbers_{k}",
         "filename": f"numbers/{k}.webp",
-        "audio_pl": f"pl/number_{k}.mp3",
-        "audio_en": f"en/number_{k}.mp3",
-        **v
+        "audio": {lang: f"{lang}/number_{k}.mp3" for lang in LANGUAGES},
+        "labels": v["labels"],
+        "desc": v.get("desc", ""),
     })
 
+# Colors — no image, per-language audio + label
 for k, v in COLORS.items():
     data["colors"].append({
         "id": f"colors_{k}",
-        "audio_pl": f"pl/color_{k}.mp3",
-        "audio_en": f"en/color_{k}.mp3",
-        **v
+        "hex": v["hex"],
+        "audio": {lang: f"{lang}/color_{k}.mp3" for lang in LANGUAGES},
+        "labels": v["labels"],
+    })
+
+# Animals — shared image + per-language audio (TTS intro + real sound)
+for k, v in ANIMALS.items():
+    data["animals"].append({
+        "id": f"animals_{k}",
+        "filename": f"animals/{k}.webp",
+        "audio": {lang: f"{lang}/animal_{k}.mp3" for lang in LANGUAGES},
+        "labels": v["labels"],
+        "desc": v.get("desc", ""),
     })
 
 output_path = os.path.join(os.path.dirname(__file__), "..", "app", "assets", "content_data.json")
+os.makedirs(os.path.dirname(output_path), exist_ok=True)
 with open(output_path, "w", encoding="utf-8") as f:
     json.dump(data, f, indent=2, ensure_ascii=False)
-print("Exported JSON successfully.")
+
+print(f"Exported: {output_path}")
+print(f"  languages: {len(data['languages'])}")
+print(f"  letters by lang: { {l: len(items) for l, items in data['letters'].items()} }")
+print(f"  numbers: {len(data['numbers'])}")
+print(f"  colors:  {len(data['colors'])}")
+print(f"  animals: {len(data['animals'])}")

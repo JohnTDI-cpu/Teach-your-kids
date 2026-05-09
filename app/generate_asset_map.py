@@ -19,16 +19,27 @@ MENU_DIR = os.path.join(APP_DIR, 'assets', 'menu')
 
 
 def collect_audio():
+    """Collect playable audio under assets/audio/<lang>/. Skip the raw
+    animal recordings (assets/audio/animals/raw) — those are inputs to
+    generate_audio.py, not assets the app should bundle."""
     out = []
     if not os.path.isdir(AUDIO_DIR):
         return out
     for root, _, files in os.walk(AUDIO_DIR):
+        rel = os.path.relpath(root, AUDIO_DIR).replace(os.sep, '/')
+        # Don't bundle raw source recordings or the parent 'animals' dir itself
+        if rel.startswith('animals'):
+            continue
         for f in files:
-            if f.endswith('.mp3'):
-                sub = os.path.basename(root)
-                key = f'{sub}/{f}'
-                rel_path = f'./assets/audio/{sub}/{f}'
-                out.append((key, rel_path))
+            if not f.endswith('.mp3'):
+                continue
+            if rel == '.':
+                key = f
+                rel_path = f'./assets/audio/{f}'
+            else:
+                key = f'{rel}/{f}'
+                rel_path = f'./assets/audio/{rel}/{f}'
+            out.append((key, rel_path))
     return sorted(out)
 
 
