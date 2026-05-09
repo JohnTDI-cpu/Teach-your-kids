@@ -1,12 +1,16 @@
-# id	wikimedia_title	license	artist	source_url
-krowa	File:Sound Ideas, COW - SINGLE MOO, ANIMAL 02.wav	CC BY-SA 4.0	Sound Ideas	https://upload.wikimedia.org/wikipedia/commons/7/71/Sound_Ideas%2C_COW_-_SINGLE_MOO%2C_ANIMAL_02.wav
-kot	File:Meow of a Siamese cat - freemaster2.wav	CC0	freemaster2	https://upload.wikimedia.org/wikipedia/commons/8/81/Meow_of_a_Siamese_cat_-_freemaster2.wav
-pies	File:Dog barking.webm	CC BY-SA 4.0	User:Dr. Nono YesMaybe	https://upload.wikimedia.org/wikipedia/commons/b/be/Dog_barking.webm
-kura	File:Chicken 01.wav	CC BY-SA 4.0	Ganesh Mohan T	https://upload.wikimedia.org/wikipedia/commons/1/14/Chicken_01.wav
-kogut	File:Kukuriku.flac	CC BY-SA 4.0	Yosef Ben Melamed	https://upload.wikimedia.org/wikipedia/commons/a/a6/Kukuriku.flac
-kaczka	File:Anas platyrhynchos - Mallard XC62258.mp3	CC BY-SA 3.0	Jonathon Jongsma	https://upload.wikimedia.org/wikipedia/commons/6/69/Anas_platyrhynchos_-_Mallard_XC62258.mp3
-kon	File:Horse in Antefasy.wav	CC0	Gasybeaugosse2020	https://upload.wikimedia.org/wikipedia/commons/9/97/Horse_in_Antefasy.wav
-swinia	File:618483 foleyhaven piglet-squeal-01.flac	CC0	Foleyhaven  https://freesound.org/people/Foleyhaven/	https://upload.wikimedia.org/wikipedia/commons/6/6f/618483_foleyhaven_piglet-squeal-01.flac
-owca	File:Lamb bleating and its mother's response.flac	CC BY-SA 4.0	Yosef Ben Melamed	https://upload.wikimedia.org/wikipedia/commons/d/da/Lamb_bleating_and_its_mother%27s_response.flac
-koza	File:Goat in Antefasy.wav	CC0	Gasybeaugosse2020	https://upload.wikimedia.org/wikipedia/commons/1/1f/Goat_in_Antefasy.wav
-osiol	File:157763 felix-blume a-donkey-is-braying-in-his-enclosure-in-south-of-france.wav	CC0	felix-blume	https://upload.wikimedia.org/wikipedia/commons/2/25/157763_felix-blume_a-donkey-is-braying-in-his-enclosure-in-south-of-france.wav
+# Generated via ElevenLabs Sound Effects API.
+# License: standard ElevenLabs paid/free tier — generated audio is
+# yours to use commercially. https://elevenlabs.io/sound-effects
+# prompt_influence=0.55
+# id	duration	prompt
+krowa	3.0s	Cute cartoon cow saying moo moo, friendly children's animated TV show, warm gentle voice, single happy cow
+kot	2.5s	Cute cartoon kitten meowing meow meow meow, playful, children's animated show, soft and adorable
+pies	3.0s	Cartoon dog barking loudly woof woof woof, multiple clear sharp friendly barks, happy energetic dog, children's animated TV show
+kura	3.0s	Cute cartoon hen clucking cluck cluck cluck, friendly farm, children's animated show
+kogut	3.0s	Cheerful cartoon rooster crowing cock-a-doodle-doo, sunny morning, children's animated TV show
+kaczka	2.5s	Cute cartoon duck quacking quack quack quack, playful and bouncy, children's animated TV show
+kon	3.0s	Cute cartoon horse neighing whinny hee-hee-hee, friendly pony, children's animated TV show
+swinia	3.0s	Adorable cartoon pink piglet snorting oink oink oink, cute baby pig, bouncy happy, children's animated TV show
+owca	2.5s	Cute cartoon sheep bleating baa baa baa, gentle fluffy, children's animated TV show
+koza	2.5s	Cute cartoon baby goat bleating maa maa maa, playful, children's animated TV show
+osiol	3.0s	Cute cartoon donkey braying hee-haw hee-haw, friendly, children's animated TV show
