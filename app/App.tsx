@@ -27,6 +27,7 @@ import {
   MergedItem,
 } from './state';
 import { AppProvider, useApp } from './AppContext';
+import { PillButton } from './Buttons';
 import { ParentApp } from './ParentApp';
 
 /** Rainbow palette for falling letters. Yellow/orange dropped because the
@@ -525,18 +526,8 @@ function RootScreens() {
             autoFocus
           />
           <View style={styles.pinActions}>
-            <TouchableOpacity
-              style={[styles.menuBtn, { backgroundColor: '#ccc', minWidth: 100, paddingVertical: 8 }]}
-              onPress={() => setShowPinDialog(false)}
-            >
-              <Text style={[styles.menuBtnText, { color: '#333', fontSize: rs(16, 20) }]}>{t('cancel')}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.menuBtn, { backgroundColor: '#4CAF50', minWidth: 100, paddingVertical: 8 }]}
-              onPress={verifyPinAndProceed}
-            >
-              <Text style={[styles.menuBtnText, { fontSize: rs(16, 20) }]}>{t('ok')}</Text>
-            </TouchableOpacity>
+            <PillButton color="gray"  size="md" label={t('cancel')} onPress={() => setShowPinDialog(false)} />
+            <PillButton color="green" size="md" label={t('ok')}     onPress={verifyPinAndProceed} />
           </View>
         </View>
       </View>

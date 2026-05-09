@@ -80,6 +80,7 @@ import {
   currentProfile,
 } from './state';
 import { useApp } from './AppContext';
+import { PillButton, RoundButton } from './Buttons';
 import { styles as appStyles, useDevice } from './App';
 
 type ParentScreen =
@@ -176,18 +177,8 @@ export function ParentApp({ onExit }: { onExit: () => void }) {
       </View>
 
       <View style={{ flexDirection: 'row', gap: 14, marginTop: 18, flexWrap: 'wrap', justifyContent: 'center' }}>
-        <TouchableOpacity
-          style={[appStyles.menuBtn, { backgroundColor: '#FF9800', paddingVertical: 10, paddingHorizontal: 20 }]}
-          onPress={() => setScreen({ kind: 'settings' })}
-        >
-          <Text style={[appStyles.menuBtnText, { fontSize: rs(15, 20) }]}>{t('parent_settings')}</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[appStyles.menuBtn, { backgroundColor: '#9C27B0', paddingVertical: 10, paddingHorizontal: 20 }]}
-          onPress={() => setScreen({ kind: 'add', cat: null })}
-        >
-          <Text style={[appStyles.menuBtnText, { fontSize: rs(15, 20) }]}>{t('add_custom_full')}</Text>
-        </TouchableOpacity>
+        <PillButton color="orange" label={t('parent_settings')} size="md" onPress={() => setScreen({ kind: 'settings' })} />
+        <PillButton color="purple" label={t('add_custom_full')} size="md" onPress={() => setScreen({ kind: 'add', cat: null })} />
       </View>
     </View>
   );
@@ -673,16 +664,10 @@ function ItemEditor({
         {/* Image controls — hidden for color items (they have no image) */}
         {cat !== 'colors' && (
           <View style={parentStyles.imgActions}>
-            <TouchableOpacity style={[parentStyles.smallBtn, { backgroundColor: '#2196F3' }]} onPress={pickImage}>
-              <Text style={parentStyles.smallBtnText}>{t('image_change_gallery')}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[parentStyles.smallBtn, { backgroundColor: '#673AB7' }]} onPress={takePhoto}>
-              <Text style={parentStyles.smallBtnText}>{t('image_change_camera')}</Text>
-            </TouchableOpacity>
+            <PillButton color="blue"   size="sm" label={t('image_change_gallery')} onPress={pickImage} />
+            <PillButton color="purple" size="sm" label={t('image_change_camera')}  onPress={takePhoto} />
             {hasImageOverride && (
-              <TouchableOpacity style={[parentStyles.smallBtn, { backgroundColor: '#9E9E9E' }]} onPress={resetImage}>
-                <Text style={parentStyles.smallBtnText}>{t('image_reset_default')}</Text>
-              </TouchableOpacity>
+              <PillButton color="gray" size="sm" label={t('image_reset_default')} onPress={resetImage} />
             )}
           </View>
         )}
@@ -714,19 +699,16 @@ function ItemEditor({
           <View style={parentStyles.recRow}>
             <Text style={parentStyles.recName}>{t('tts_voice_label')}</Text>
             <View style={parentStyles.recButtons}>
-              <TouchableOpacity style={parentStyles.iconBtn} onPress={playBuiltin}>
-                <Text style={parentStyles.iconBtnText}>
-                  {playingId === 'builtin' ? '⏸' : '▶'}
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[parentStyles.iconBtn, !selectedId && parentStyles.iconBtnSelected]}
+              <RoundButton
+                color="blue" size={42}
+                label={playingId === 'builtin' ? '⏸' : '▶'}
+                onPress={playBuiltin}
+              />
+              <PillButton
+                color={!selectedId ? 'green' : 'gray'} size="sm"
+                label={!selectedId ? t('selected') : t('select')}
                 onPress={() => onSelect(null)}
-              >
-                <Text style={[parentStyles.iconBtnText, !selectedId && { color: '#fff' }]}>
-                  {!selectedId ? t('selected') : t('select')}
-                </Text>
-              </TouchableOpacity>
+              />
             </View>
           </View>
         )}
@@ -758,36 +740,22 @@ function ItemEditor({
                       🎙 {r.label}
                     </Text>
                     <View style={parentStyles.recButtons}>
-                      <TouchableOpacity
-                        style={parentStyles.iconBtn}
+                      <RoundButton
+                        color="blue" size={42}
+                        label={playing ? '⏸' : '▶'}
                         onPress={() => playRecording(r)}
-                      >
-                        <Text style={parentStyles.iconBtnText}>{playing ? '⏸' : '▶'}</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={[
-                          parentStyles.iconBtn,
-                          isSel && parentStyles.iconBtnSelected,
-                        ]}
+                      />
+                      <PillButton
+                        color={isSel ? 'green' : 'gray'}
+                        size="sm"
+                        label={isSel ? t('selected') : t('select')}
                         onPress={() => onSelect(r.id)}
-                      >
-                        <Text
-                          style={[
-                            parentStyles.iconBtnText,
-                            isSel && { color: '#fff' },
-                          ]}
-                        >
-                          {isSel ? t('selected') : t('select')}
-                        </Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={[parentStyles.iconBtn, parentStyles.deleteBtn]}
+                      />
+                      <RoundButton
+                        color="red" size={42}
+                        label="🗑"
                         onPress={() => onDelete(r)}
-                      >
-                        <Text style={[parentStyles.iconBtnText, { color: '#fff' }]}>
-                          🗑
-                        </Text>
-                      </TouchableOpacity>
+                      />
                     </View>
                   </View>
                 );
@@ -796,44 +764,28 @@ function ItemEditor({
         )}
 
         {/* Record button */}
-        <TouchableOpacity
-          style={[
-            parentStyles.recordBtn,
-            { backgroundColor: isRecording ? '#D32F2F' : '#4CAF50' },
-          ]}
+        <PillButton
+          color={isRecording ? 'red' : 'green'}
+          size="lg"
+          label={isRecording ? tn('record_stop', { s: recElapsed }) : t('record_new_variant')}
           onPress={isRecording ? stopRecording : startRecording}
-        >
-          <Text style={parentStyles.recordBtnText}>
-            {isRecording ? tn('record_stop', { s: recElapsed }) : t('record_new_variant')}
-          </Text>
-        </TouchableOpacity>
+          style={{ marginTop: 16 }}
+        />
 
         {/* Danger zone */}
         <View style={parentStyles.dangerZone}>
           {!isCustom && (hasImageOverride || hasLabelOverride || recordings.length > 0 || isHidden) && (
-            <TouchableOpacity
-              style={[parentStyles.smallBtn, { backgroundColor: '#9E9E9E', minWidth: 200 }]}
-              onPress={onResetDefault}
-            >
-              <Text style={parentStyles.smallBtnText}>↺ Przywróć oryginał</Text>
-            </TouchableOpacity>
+            <PillButton color="gray" size="md" label={`${t('restore')} ${t('reset_to_default_btn')}`}
+              onPress={onResetDefault} style={{ minWidth: 200 }} />
           )}
           {isHidden ? (
-            <TouchableOpacity
-              style={[parentStyles.smallBtn, { backgroundColor: '#4CAF50', minWidth: 200 }]}
+            <PillButton color="green" size="md" label={t('show_again')}
               onPress={async () => { await persist(unhideItem(state, itemId)); }}
-            >
-              <Text style={parentStyles.smallBtnText}>👁 Pokaż ponownie</Text>
-            </TouchableOpacity>
+              style={{ minWidth: 200 }} />
           ) : (
-            <TouchableOpacity
-              style={[parentStyles.smallBtn, { backgroundColor: '#D32F2F', minWidth: 200 }]}
-              onPress={onDeleteItem}
-            >
-              <Text style={parentStyles.smallBtnText}>
-                🗑 {isCustom ? 'Usuń fiszkę' : 'Ukryj fiszkę'}
-              </Text>
-            </TouchableOpacity>
+            <PillButton color="red" size="md"
+              label={isCustom ? t('delete_card') : t('hide_card')}
+              onPress={onDeleteItem} style={{ minWidth: 200 }} />
           )}
         </View>
       </ScrollView>
@@ -1063,23 +1015,19 @@ function AddCustomItem({
       </TouchableOpacity>
 
       <ScrollView contentContainerStyle={{ padding: 16, paddingTop: 68 }}>
-        <Text style={[appStyles.title, { fontSize: 20 }]}>Dodaj swoją fiszkę</Text>
+        <Text style={[appStyles.title, { fontSize: 20 }]}>{t('add_custom_title')}</Text>
 
         {/* Image */}
         <View style={[parentStyles.heroCard, { height: 160 }]}>
           {imageUri ? (
             <Image source={{ uri: imageUri }} style={parentStyles.heroImg} resizeMode="contain" />
           ) : (
-            <Text style={{ color: '#999', fontSize: 16 }}>Brak zdjęcia</Text>
+            <Text style={{ color: '#999', fontSize: 16 }}>{t('no_image')}</Text>
           )}
         </View>
         <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 16 }}>
-          <TouchableOpacity style={[appStyles.menuBtn, { backgroundColor: '#2196F3', minWidth: 0 }]} onPress={pickImage}>
-            <Text style={appStyles.menuBtnText}>{t('pick_gallery')}</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={[appStyles.menuBtn, { backgroundColor: '#673AB7', minWidth: 0 }]} onPress={takePhoto}>
-            <Text style={appStyles.menuBtnText}>{t('take_photo')}</Text>
-          </TouchableOpacity>
+          <PillButton color="blue"   size="md" label={t('pick_gallery')} onPress={pickImage} />
+          <PillButton color="purple" size="md" label={t('take_photo')}   onPress={takePhoto} />
         </View>
 
         {/* Label */}
@@ -1138,32 +1086,18 @@ function AddCustomItem({
                     🎙 {r.label}
                   </Text>
                   <View style={parentStyles.recButtons}>
-                    <TouchableOpacity
-                      style={parentStyles.iconBtn}
+                    <RoundButton color="blue" size={42}
+                      label={playingId === r.id ? '⏸' : '▶'}
                       onPress={() => playRec(r)}
-                    >
-                      <Text style={parentStyles.iconBtnText}>
-                        {playingId === r.id ? '⏸' : '▶'}
-                      </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[
-                        parentStyles.iconBtn,
-                        selectedId === r.id && parentStyles.iconBtnSelected,
-                      ]}
+                    />
+                    <PillButton
+                      color={selectedId === r.id ? 'green' : 'gray'}
+                      size="sm"
+                      label={selectedId === r.id ? t('selected') : t('select')}
                       onPress={() => setSelectedId(r.id)}
-                    >
-                      <Text
-                        style={[
-                          parentStyles.iconBtnText,
-                          selectedId === r.id && { color: '#fff' },
-                        ]}
-                      >
-                        {selectedId === r.id ? t('selected') : t('select')}
-                      </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[parentStyles.iconBtn, parentStyles.deleteBtn]}
+                    />
+                    <RoundButton color="red" size={42}
+                      label="🗑"
                       onPress={async () => {
                         await deleteFileQuietly(r.uri);
                         setRecordings((rs) => rs.filter((x) => x.id !== r.id));
@@ -1173,41 +1107,26 @@ function AddCustomItem({
                             : cur,
                         );
                       }}
-                    >
-                      <Text style={[parentStyles.iconBtnText, { color: '#fff' }]}>🗑</Text>
-                    </TouchableOpacity>
+                    />
                   </View>
                 </View>
               ))}
           </>
         )}
-        <TouchableOpacity
-          style={[
-            parentStyles.recordBtn,
-            { backgroundColor: isRecording ? '#D32F2F' : '#4CAF50' },
-          ]}
+        <PillButton
+          color={isRecording ? 'red' : 'green'} size="lg"
+          label={isRecording ? tn('record_stop', { s: recElapsed }) : t('record_new_variant')}
           onPress={isRecording ? stopRecording : startRecording}
-        >
-          <Text style={parentStyles.recordBtnText}>
-            {isRecording ? tn('record_stop', { s: recElapsed }) : t('record_new_variant')}
-          </Text>
-        </TouchableOpacity>
+          style={{ marginTop: 16 }}
+        />
 
         {/* Save */}
-        <TouchableOpacity
-          style={[
-            appStyles.menuBtn,
-            { backgroundColor: '#FF9800', marginTop: 20, alignSelf: 'center' },
-          ]}
-          onPress={onSave}
-          disabled={busy}
-        >
-          {busy ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={appStyles.menuBtnText}>{t('save_card')}</Text>
-          )}
-        </TouchableOpacity>
+        {busy ? (
+          <ActivityIndicator color="#FF9800" style={{ marginTop: 20 }} />
+        ) : (
+          <PillButton color="orange" size="lg" label={t('save_card')}
+            onPress={onSave} style={{ marginTop: 20, alignSelf: 'center' }} />
+        )}
       </ScrollView>
     </View>
   );
@@ -1305,15 +1224,8 @@ function Settings({ onBack }: { onBack: () => void }) {
           </View>
         ))}
 
-        <TouchableOpacity
-          style={[
-            appStyles.menuBtn,
-            { backgroundColor: '#4CAF50', alignSelf: 'center', marginTop: 24 },
-          ]}
-          onPress={onSave}
-        >
-          <Text style={appStyles.menuBtnText}>{t('save')}</Text>
-        </TouchableOpacity>
+        <PillButton color="green" size="lg" label={t('save')}
+          onPress={onSave} style={{ alignSelf: 'center', marginTop: 24 }} />
       </ScrollView>
     </View>
   );

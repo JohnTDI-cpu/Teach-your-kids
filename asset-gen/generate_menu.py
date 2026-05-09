@@ -108,6 +108,50 @@ PROMPTS = [
             "warm pastel peach background, kawaii style, round friendly composition"
         ),
     },
+    # ----- Empty buttons. Qwen-image is poor at letters so we keep text in
+    # React Native and use these only as backgrounds. Each is the same shape
+    # repeated in a different colour — matching the palette already used
+    # across the app so existing layouts barely have to move. -----
+    *[
+        {
+            "filename": f"btn_pill_{name}.webp",
+            "width": 1024,
+            "height": 320,
+            "prompt": QWEN_STYLE + (
+                f"A horizontal pill-shaped 3D button, glossy plastic finish in {color_desc}, "
+                "smooth rounded edges, subtle highlight on top, soft drop shadow underneath, "
+                "centered on a pure white background, no text, no symbols, no numbers, "
+                "professional UI button asset"
+            ),
+        }
+        for name, color_desc in [
+            ("green",  "vibrant kelly green"),
+            ("blue",   "bright sky blue"),
+            ("orange", "warm sunset orange"),
+            ("purple", "vivid magenta purple"),
+            ("red",    "bright cherry red"),
+            ("gray",   "soft warm light gray"),
+        ]
+    ],
+    *[
+        {
+            "filename": f"btn_round_{name}.webp",
+            "width": 512,
+            "height": 512,
+            "prompt": QWEN_STYLE + (
+                f"A round 3D button, glossy plastic finish in {color_desc}, "
+                "smooth circular edge, subtle highlight on top, soft drop shadow underneath, "
+                "perfectly centered on pure white background, no text, no symbols, "
+                "professional UI button asset"
+            ),
+        }
+        for name, color_desc in [
+            ("green", "vibrant kelly green"),
+            ("blue",  "bright sky blue"),
+            ("red",   "bright cherry red"),
+            ("gray",  "soft warm light gray"),
+        ]
+    ],
 ]
 
 
