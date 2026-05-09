@@ -7,7 +7,6 @@ import {
   Animated,
   Easing,
   Image,
-  NativeModules,
   TextInput,
   Alert,
   ImageBackground,
@@ -15,6 +14,7 @@ import {
   BackHandler,
 } from 'react-native';
 import { Audio, AVPlaybackStatus } from 'expo-av';
+import { useFonts, Fredoka_500Medium, Fredoka_700Bold } from '@expo-google-fonts/fredoka';
 
 import { AudioAssets, ImageAssets, MenuAssets } from './AssetMap';
 import {
@@ -28,7 +28,12 @@ import {
 } from './state';
 import { ParentApp } from './ParentApp';
 
-const { KioskModule } = NativeModules;
+/** Rainbow palette used to colour individual falling letters. */
+const RAINBOW = ['#FF3B30', '#FF9500', '#FFCC00', '#34C759', '#00B8D9', '#AF52DE', '#FF2D92'];
+
+/** App-wide font names — loaded by the root component. */
+const FONT_BOLD = 'Fredoka_700Bold';
+const FONT_MEDIUM = 'Fredoka_500Medium';
 
 /* ============================================================
    Responsive hook — use inside any component that needs to adapt
@@ -94,9 +99,12 @@ function FlashcardGame({ category, state, onBack }: FlashcardProps) {
   const lastIndexRef = useRef<number>(-1);
 
   const scaleAnim = useRef(new Animated.Value(1)).current;
-  const wordsAnim = useRef<Animated.Value[]>([]).current;
+  // Per-character (not per-word) animations for the falling letters effect.
+  const charsAnim = useRef<{
+    fall: Animated.Value; rot: Animated.Value;
+  }[]>([]).current;
   const lockShake = useRef(new Animated.Value(0)).current;
-  const [words, setWords] = useState<string[]>([]);
+  const [chars, setChars] = useState<string[]>([]);
 
   // Card dimensions adapt to orientation
   const cardW = isLandscape
@@ -119,25 +127,45 @@ function FlashcardGame({ category, state, onBack }: FlashcardProps) {
 
   const animateChange = useCallback(
     (newText: string) => {
-      const newWords = newText.split(' ');
-      setWords(newWords);
-      wordsAnim.length = 0;
-      newWords.forEach(() => wordsAnim.push(new Animated.Value(-200)));
+      // Split into characters (preserving spaces). Each gets its own anim
+      // value so they fall in slightly at different times like Sesame Street.
+      const newChars = Array.from(newText);
+      setChars(newChars);
+      charsAnim.length = 0;
+      newChars.forEach(() =>
+        charsAnim.push({
+          fall: new Animated.Value(-260),
+          rot: new Animated.Value((Math.random() - 0.5) * 1.4), // -0.7..0.7 rad
+        }),
+      );
+
+      // Card pops in on top of the falling letters
       scaleAnim.setValue(0.5);
       Animated.spring(scaleAnim, { toValue: 1, friction: 4, useNativeDriver: true }).start();
-      Animated.parallel(
-        wordsAnim.map((anim, i) =>
-          Animated.timing(anim, {
+
+      // Stagger characters with a 60ms gap; each spring-bounces into place.
+      const animations = newChars.flatMap((ch, i) => {
+        if (ch === ' ') return [];
+        return [
+          Animated.spring(charsAnim[i].fall, {
             toValue: 0,
-            duration: 380,
-            delay: i * 200,
-            easing: Easing.bounce,
+            friction: 5,
+            tension: 90,
+            delay: i * 60,
             useNativeDriver: true,
           }),
-        ),
-      ).start();
+          Animated.spring(charsAnim[i].rot, {
+            toValue: 0,
+            friction: 5,
+            tension: 90,
+            delay: i * 60,
+            useNativeDriver: true,
+          }),
+        ];
+      });
+      Animated.parallel(animations).start();
     },
-    [scaleAnim, wordsAnim],
+    [scaleAnim, charsAnim],
   );
 
   const playAudioFor = useCallback(async (item: MergedItem) => {
@@ -217,19 +245,40 @@ function FlashcardGame({ category, state, onBack }: FlashcardProps) {
       </TouchableOpacity>
 
       <View style={styles.textContainer} pointerEvents="none">
-        {words.map((word, index) => (
-          <Animated.Text
-            key={index}
-            style={[
-              styles.fallingText,
-              { fontSize: fallingFontSize },
-              isColor && { color: '#ffffff', textShadowColor: 'rgba(0,0,0,0.6)' },
-              { transform: [{ translateY: wordsAnim[index] || new Animated.Value(0) }] },
-            ]}
-          >
-            {word}{' '}
-          </Animated.Text>
-        ))}
+        {chars.map((ch, index) => {
+          if (ch === ' ') return <Text key={index} style={[styles.fallingText, { fontSize: fallingFontSize }]}>{' '}</Text>;
+          const a = charsAnim[index];
+          // Skip animation values that haven't been initialised yet (initial render race)
+          if (!a) {
+            return (
+              <Text key={index} style={[styles.fallingText, { fontSize: fallingFontSize }]}>
+                {ch}
+              </Text>
+            );
+          }
+          // For colors we use white text + dark shadow so it stays readable on
+          // any hex background; for everything else we cycle the rainbow.
+          const colorOverride = isColor
+            ? { color: '#ffffff', textShadowColor: 'rgba(0,0,0,0.55)', textShadowRadius: 6 }
+            : { color: RAINBOW[index % RAINBOW.length] };
+          const rotate = a.rot.interpolate({
+            inputRange: [-1, 1],
+            outputRange: ['-30deg', '30deg'],
+          });
+          return (
+            <Animated.Text
+              key={index}
+              style={[
+                styles.fallingText,
+                { fontSize: fallingFontSize },
+                colorOverride,
+                { transform: [{ translateY: a.fall }, { rotate }] },
+              ]}
+            >
+              {ch}
+            </Animated.Text>
+          );
+        })}
       </View>
 
       <TouchableOpacity
@@ -246,9 +295,9 @@ function FlashcardGame({ category, state, onBack }: FlashcardProps) {
           ]}
         >
           {isColor ? (
-            <Text style={[styles.text, { fontSize: cardTextSize, color: '#ffffff', textShadowColor: 'rgba(0,0,0,0.5)', textShadowRadius: 8 }]}>
-              {currentItem.primary}
-            </Text>
+            // Pure colour swatch — the colour name already falls down at the top,
+            // so we don't repeat it here. Just an empty rounded card filled with the hue.
+            null
           ) : cardImage ? (
             <Image source={cardImage} style={styles.image} resizeMode="contain" />
           ) : (
@@ -357,6 +406,11 @@ function ChildMenu({ state, onSelect, onBack }: ChildMenuProps) {
 export default function App() {
   const { width, height, isLandscape, rs } = useDevice();
 
+  const [fontsLoaded] = useFonts({
+    Fredoka_500Medium,
+    Fredoka_700Bold,
+  });
+
   const [screen, setScreen] = useState<'menu' | 'child_menu' | 'flashcard' | 'parent'>('menu');
   const [selectedCategory, setSelectedCategory] = useState<CategoryId>('animals');
   const [state, setState] = useState<PersistedState | null>(null);
@@ -381,45 +435,27 @@ export default function App() {
     })();
   }, []);
 
-  // Hardware back button: block in child screens, intercept exit elsewhere.
+  // Hardware back button: blocked in child screens, used as in-app
+  // navigation everywhere else. The kiosk lock-task feature has been removed
+  // — fullscreen comes from MainActivity.applyImmersiveMode() now.
   useEffect(() => {
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
       if (showPinDialog) { setShowPinDialog(false); setPinInput(''); return true; }
       if (screen === 'child_menu') { handleExitChildModeRequest(); return true; }
       if (screen === 'flashcard') { setScreen('child_menu'); return true; }
       if (screen === 'parent') { setScreen('menu'); return true; }
-      return false; // root menu → allow normal back
+      return false; // root menu → allow system back to leave the app
     });
     return () => sub.remove();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [screen, showPinDialog]);
-
-  // Kiosk auto-apply: locked everywhere except the parent panel.
-  // No-op when state.kioskEnabled is false. Calling enableKioskMode while
-  // already pinned is idempotent at the OS level.
-  useEffect(() => {
-    if (!state?.kioskEnabled || !KioskModule?.enableKioskMode) return;
-    if (screen === 'parent' || showPinDialog) return;
-    try {
-      const r = KioskModule.enableKioskMode();
-      if (r && typeof r.then === 'function') r.catch(() => {});
-    } catch {}
-  }, [state?.kioskEnabled, screen, showPinDialog]);
 
   const persist = useCallback(async (next: PersistedState) => {
     setState(next);
     try { await saveState(next); } catch (e) { console.warn('saveState', e); }
   }, []);
 
-  const handleEnterChildMode = () => {
-    if (state?.kioskEnabled && KioskModule?.enableKioskMode) {
-      try {
-        const r = KioskModule.enableKioskMode();
-        if (r && typeof r.then === 'function') r.catch((e: any) => console.warn('kiosk enable failed', e));
-      } catch (e) { console.warn('kiosk enable threw', e); }
-    }
-    setScreen('child_menu');
-  };
+  const handleEnterChildMode = () => setScreen('child_menu');
 
   const handleExitChildModeRequest = () => {
     setTargetScreenAfterPin('menu');
@@ -438,12 +474,6 @@ export default function App() {
     if (pinInput === state.pin) {
       setShowPinDialog(false);
       setPinInput('');
-      if (KioskModule?.disableKioskMode) {
-        try {
-          const r = KioskModule.disableKioskMode();
-          if (r && typeof r.then === 'function') r.catch(() => {});
-        } catch {}
-      }
       setScreen(targetScreenAfterPin);
     } else {
       Alert.alert('Błędny PIN', 'Spróbuj ponownie.');
@@ -451,7 +481,7 @@ export default function App() {
     }
   };
 
-  if (!state) {
+  if (!state || !fontsLoaded) {
     return (
       <View style={[styles.container, { backgroundColor: '#ffdb58' }]}>
         <Text style={styles.title}>Wczytuję…</Text>
@@ -607,8 +637,8 @@ export const styles = StyleSheet.create({
     shadowRadius: 10,
     minWidth: 280,
   },
-  pinTitle: { fontSize: 22, fontWeight: 'bold', color: '#333', marginBottom: 4 },
-  pinSubtitle: { fontSize: 14, color: '#666', marginBottom: 16 },
+  pinTitle: { fontSize: 22, fontFamily: FONT_BOLD, color: '#333', marginBottom: 4 },
+  pinSubtitle: { fontSize: 14, color: '#666', marginBottom: 16, fontFamily: FONT_MEDIUM },
   pinInput: {
     fontSize: 36,
     letterSpacing: 16,
@@ -618,10 +648,11 @@ export const styles = StyleSheet.create({
     width: '80%',
     marginBottom: 24,
     paddingVertical: 8,
+    fontFamily: FONT_BOLD,
   },
   pinActions: { flexDirection: 'row', gap: 16, justifyContent: 'center', width: '100%' },
-  title: { fontSize: 22, fontWeight: 'bold', color: '#333', marginBottom: 6, textAlign: 'center' },
-  subtitle: { fontSize: 15, color: '#666', marginBottom: 20, textAlign: 'center' },
+  title: { fontSize: 22, fontFamily: FONT_BOLD, color: '#333', marginBottom: 6, textAlign: 'center' },
+  subtitle: { fontSize: 15, color: '#666', marginBottom: 20, textAlign: 'center', fontFamily: FONT_MEDIUM },
   menuRow: { flexDirection: 'row', gap: 24, flexWrap: 'wrap', justifyContent: 'center' },
   menuBtn: {
     paddingVertical: 14,
@@ -635,7 +666,7 @@ export const styles = StyleSheet.create({
     minWidth: 140,
     alignItems: 'center',
   },
-  menuBtnText: { fontSize: 20, color: 'white', fontWeight: 'bold' },
+  menuBtnText: { fontSize: 20, color: 'white', fontFamily: FONT_BOLD },
   bigMenuBtn: {
     paddingVertical: 14,
     paddingHorizontal: 22,
@@ -657,7 +688,7 @@ export const styles = StyleSheet.create({
     borderWidth: 3,
     borderColor: 'rgba(255,255,255,0.85)',
   },
-  bigMenuEmoji: { fontSize: 64, marginBottom: 6 },
+  bigMenuEmoji: { fontSize: 64, marginBottom: 6, fontFamily: FONT_BOLD },
   gridContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -691,8 +722,8 @@ export const styles = StyleSheet.create({
     textShadowOffset: { width: 1, height: 1 },
     textShadowRadius: 6,
   },
-  categoryIcon: { fontSize: 46, fontWeight: 'bold', color: 'white', marginBottom: 6 },
-  categoryText: { fontSize: 20, fontWeight: 'bold', color: 'white' },
+  categoryIcon: { fontSize: 46, fontFamily: FONT_BOLD, color: 'white', marginBottom: 6 },
+  categoryText: { fontSize: 20, fontFamily: FONT_BOLD, color: 'white' },
   textContainer: {
     position: 'absolute',
     top: '7%',
@@ -705,12 +736,12 @@ export const styles = StyleSheet.create({
   },
   fallingText: {
     fontSize: 36,
-    fontWeight: 'bold',
+    fontFamily: FONT_BOLD,
     color: '#FF5733',
-    textShadowColor: 'rgba(0, 0, 0, 0.2)',
-    textShadowOffset: { width: 2, height: 2 },
-    textShadowRadius: 5,
-    marginHorizontal: 4,
+    textShadowColor: 'rgba(0, 0, 0, 0.25)',
+    textShadowOffset: { width: 2, height: 3 },
+    textShadowRadius: 6,
+    marginHorizontal: 1,
   },
   touchArea: {
     flex: 1,
@@ -731,7 +762,7 @@ export const styles = StyleSheet.create({
     elevation: 10,
     padding: 16,
   },
-  text: { fontSize: 42, fontWeight: 'bold', color: '#333', textAlign: 'center' },
+  text: { fontSize: 42, fontFamily: FONT_BOLD, color: '#333', textAlign: 'center' },
   image: { width: '90%', height: '90%', borderRadius: 16 },
   backBtn: {
     position: 'absolute',
@@ -743,7 +774,7 @@ export const styles = StyleSheet.create({
     borderRadius: 14,
     zIndex: 20,
   },
-  backBtnText: { fontSize: 16, fontWeight: 'bold', color: '#333' },
+  backBtnText: { fontSize: 16, fontFamily: FONT_BOLD, color: '#333' },
   gateBar: {
     position: 'absolute',
     bottom: 12,
@@ -753,7 +784,7 @@ export const styles = StyleSheet.create({
   },
   gateText: {
     fontSize: 16,
-    fontWeight: 'bold',
+    fontFamily: FONT_BOLD,
     color: '#fff',
     backgroundColor: 'rgba(0,0,0,0.5)',
     paddingHorizontal: 14,
@@ -763,7 +794,7 @@ export const styles = StyleSheet.create({
   },
   gateTextReady: {
     fontSize: 15,
-    fontWeight: 'bold',
+    fontFamily: FONT_BOLD,
     color: '#fff',
     backgroundColor: 'rgba(76,175,80,0.85)',
     paddingHorizontal: 14,

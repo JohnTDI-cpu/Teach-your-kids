@@ -1248,7 +1248,6 @@ function Settings({
   onBack: () => void;
 }) {
   const [labels, setLabels] = useState({ ...state.categoryLabels });
-  const [kioskEnabled, setKioskEnabled] = useState(state.kioskEnabled);
   const [pin, setPin] = useState(state.pin);
   const [language, setLanguageState] = useState<LanguageCode>(state.language);
 
@@ -1263,7 +1262,7 @@ function Settings({
         if (v) next = setCategoryLabel(next, cat, v);
       });
     }
-    next = { ...next, kioskEnabled, pin: pin.trim() || '1234' };
+    next = { ...next, pin: pin.trim() || '1234' };
     await persist(next);
     onBack();
   };
@@ -1303,53 +1302,6 @@ function Settings({
             ⚠️ Zmiana języka zresetuje nazwy kategorii do ustawień języka.
           </Text>
         )}
-
-        {/* Kiosk lock */}
-        <Text style={parentStyles.fieldLabel}>🔒 Blokada ekranu (kiosk)</Text>
-        <TouchableOpacity
-          style={[
-            parentStyles.switchRow,
-            kioskEnabled && { backgroundColor: '#4CAF50' },
-          ]}
-          onPress={() => setKioskEnabled((v) => !v)}
-          activeOpacity={0.85}
-        >
-          <View style={{ flex: 1 }}>
-            <Text
-              style={[
-                parentStyles.switchTitle,
-                kioskEnabled && { color: '#fff' },
-              ]}
-            >
-              {kioskEnabled ? 'Włączona' : 'Wyłączona'}
-            </Text>
-            <Text
-              style={[
-                parentStyles.switchSub,
-                kioskEnabled && { color: 'rgba(255,255,255,0.85)' },
-              ]}
-            >
-              Po wejściu w tryb dziecka aplikacja zablokuje przyciski systemowe.
-              Wyjście wymaga PIN-u. (Pierwszy raz Android pokaże potwierdzenie.)
-            </Text>
-          </View>
-          <View
-            style={[
-              parentStyles.switchKnob,
-              kioskEnabled && { backgroundColor: '#fff' },
-            ]}
-          >
-            <Text
-              style={{
-                fontSize: 22,
-                fontWeight: 'bold',
-                color: kioskEnabled ? '#4CAF50' : '#999',
-              }}
-            >
-              {kioskEnabled ? '✓' : '○'}
-            </Text>
-          </View>
-        </TouchableOpacity>
 
         {/* PIN */}
         <Text style={parentStyles.fieldLabel}>🔑 Kod PIN rodzica</Text>
