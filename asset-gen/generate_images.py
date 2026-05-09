@@ -1,16 +1,21 @@
 """
-Teach Your Kids — Image Generation Script (ComfyUI API)
-Uses FLUX 2 Klein 4B via ComfyUI API with local models from disk.
-Designed for RTX 5060 (8GB VRAM).
+Teach Your Kids — Image Generation (Qwen-Image via ComfyUI / AMD)
 
-Prerequisites:
-    ComfyUI server must be running on http://127.0.0.1:8188
-    Start with: python main.py --listen 127.0.0.1 --port 8188 --base-directory "C:\\Users\\mktel\\Documents\\ComfyUI"
+Same pipeline as generate_menu.py: Qwen-Image GGUF + Lightning 8-step LoRA.
+Reads jobs from content_data.get_all_image_prompts() (multi-language letters,
+shared numbers, shared animals).
+
+Prereqs:
+    Start ComfyUI:  ~/ComfyUI/start_comfyui_amd.sh
+    Models in ~/ComfyUI/models/{unet,text_encoders,vae,loras}.
 
 Usage:
-    python generate_images.py                    # Generate all images
-    python generate_images.py --category animals # Generate only animals
-    python generate_images.py --dry-run          # Show prompts without generating
+    python generate_images.py                            # all jobs (skip existing)
+    python generate_images.py --category letters         # all letters across langs
+    python generate_images.py --category letters --lang de,es,fr,it,uk
+    python generate_images.py --category numbers
+    python generate_images.py --category animals
+    python generate_images.py --dry-run
 """
 
 import os
@@ -18,248 +23,243 @@ import sys
 import time
 import json
 import uuid
+import argparse
 import urllib.request
 import urllib.error
 from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(__file__))
-from content_data import get_all_image_prompts, IMAGE_CONFIG
+from content_data import get_all_image_prompts, IMAGE_CONFIG, LANGUAGES
 
-OUTPUT_DIR = Path(__file__).parent.parent / "app" / "assets" / "images"
+OUTPUT_DIR = Path(__file__).resolve().parent.parent / "app" / "assets" / "images"
 COMFYUI_URL = "http://127.0.0.1:8188"
 
-# ComfyUI workflow template for FLUX 2 Klein
-def build_workflow(prompt_text: str, seed: int, width: int = 768, height: int = 768, steps: int = 20):
-    """Build a ComfyUI API workflow for FLUX 2 Klein image generation."""
+NEG = (
+    "low quality, blurry, distorted, text, watermark, scary, dark, gloomy, ugly, deformed, "
+    "multiple objects, hands, fingers"
+)
+
+
+def build_workflow(prompt: str, neg: str, width: int, height: int, seed: int, steps: int = 8, cfg: float = 1.0):
+    """Qwen-Image GGUF + Lightning 8-step LoRA — identical to generate_menu.py
+    so visual style stays consistent across menu graphics, letters, numbers,
+    animals."""
     return {
-        "3": {  # CLIPLoader — loads text encoder from disk
+        "1": {
+            "class_type": "UnetLoaderGGUF",
+            "inputs": {"unet_name": "qwen-image-2512-Q6_K.gguf"},
+        },
+        "2": {
             "class_type": "CLIPLoader",
             "inputs": {
-                "clip_name": "qwen_3_4b_fp4_flux2.safetensors",
-                "type": "flux2",
+                "clip_name": "qwen_2.5_vl_7b_fp8_scaled.safetensors",
+                "type": "qwen_image",
             },
         },
-        "5": {  # CLIPTextEncode — encodes our prompt
-            "class_type": "CLIPTextEncode",
-            "inputs": {
-                "text": prompt_text,
-                "clip": ["3", 0],
-            },
-        },
-        "10": {  # UNETLoader — loads the diffusion model from disk
-            "class_type": "UNETLoader",
-            "inputs": {
-                "unet_name": "flux-2-klein-4b-fp8.safetensors",
-                "weight_dtype": "default",
-            },
-        },
-        "11": {  # VAELoader — loads VAE from disk
+        "3": {
             "class_type": "VAELoader",
+            "inputs": {"vae_name": "qwen_image_vae.safetensors"},
+        },
+        "4": {
+            "class_type": "LoraLoaderModelOnly",
             "inputs": {
-                "vae_name": "flux2-vae.safetensors",
+                "model": ["1", 0],
+                "lora_name": "Qwen-Image-Lightning-8steps-V2.0-bf16.safetensors",
+                "strength_model": 1.0,
             },
         },
-        "13": {  # EmptyLatentImage
+        "5": {
+            "class_type": "ModelSamplingAuraFlow",
+            "inputs": {"model": ["4", 0], "shift": 3.1},
+        },
+        "6": {
+            "class_type": "CLIPTextEncode",
+            "inputs": {"clip": ["2", 0], "text": prompt},
+        },
+        "7": {
+            "class_type": "CLIPTextEncode",
+            "inputs": {"clip": ["2", 0], "text": neg},
+        },
+        "8": {
             "class_type": "EmptyLatentImage",
-            "inputs": {
-                "width": width,
-                "height": height,
-                "batch_size": 1,
-            },
+            "inputs": {"width": width, "height": height, "batch_size": 1},
         },
-        "15": {  # KSampler
+        "9": {
             "class_type": "KSampler",
             "inputs": {
-                "model": ["10", 0],
-                "positive": ["5", 0],
-                "negative": ["16", 0],
-                "latent_image": ["13", 0],
+                "model": ["5", 0],
+                "positive": ["6", 0],
+                "negative": ["7", 0],
+                "latent_image": ["8", 0],
                 "seed": seed,
                 "steps": steps,
-                "cfg": IMAGE_CONFIG["guidance_scale"],
+                "cfg": cfg,
                 "sampler_name": "euler",
                 "scheduler": "simple",
                 "denoise": 1.0,
             },
         },
-        "16": {  # Empty negative conditioning
-            "class_type": "CLIPTextEncode",
-            "inputs": {
-                "text": "",
-                "clip": ["3", 0],
-            },
-        },
-        "17": {  # VAEDecode
+        "10": {
             "class_type": "VAEDecode",
-            "inputs": {
-                "samples": ["15", 0],
-                "vae": ["11", 0],
-            },
+            "inputs": {"samples": ["9", 0], "vae": ["3", 0]},
         },
-        "19": {  # SaveImage — save to ComfyUI output folder
+        "11": {
             "class_type": "SaveImage",
-            "inputs": {
-                "images": ["17", 0],
-                "filename_prefix": "teachyourkids",
-            },
+            "inputs": {"images": ["10", 0], "filename_prefix": "tyk_img"},
         },
     }
 
 
-def queue_prompt(workflow: dict, client_id: str) -> str:
-    """Submit a workflow to ComfyUI and return the prompt_id."""
-    payload = json.dumps({"prompt": workflow, "client_id": client_id}).encode("utf-8")
+def queue_prompt(workflow, client_id):
+    payload = json.dumps({"prompt": workflow, "client_id": client_id}).encode()
     req = urllib.request.Request(
         f"{COMFYUI_URL}/prompt",
         data=payload,
         headers={"Content-Type": "application/json"},
     )
-    resp = urllib.request.urlopen(req)
-    result = json.loads(resp.read())
-    return result["prompt_id"]
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        return json.loads(resp.read())["prompt_id"]
 
 
-def wait_for_completion(prompt_id: str, timeout: int = 300) -> dict:
-    """Poll ComfyUI history until the prompt is done."""
+def wait_for(prompt_id, timeout=600):
     start = time.time()
     while time.time() - start < timeout:
         try:
-            resp = urllib.request.urlopen(f"{COMFYUI_URL}/history/{prompt_id}")
-            history = json.loads(resp.read())
-            if prompt_id in history:
-                return history[prompt_id]
+            with urllib.request.urlopen(f"{COMFYUI_URL}/history/{prompt_id}", timeout=10) as resp:
+                hist = json.loads(resp.read())
+                if prompt_id in hist:
+                    return hist[prompt_id]
         except urllib.error.URLError:
             pass
-        time.sleep(1)
-    raise TimeoutError(f"Prompt {prompt_id} did not complete within {timeout}s")
+        time.sleep(2)
+    raise TimeoutError(f"prompt {prompt_id} timed out after {timeout}s")
 
 
-def download_image(filename: str, subfolder: str, output_path: Path):
-    """Download a generated image from ComfyUI server."""
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    
+def download(filename, subfolder, out_path):
+    out_path.parent.mkdir(parents=True, exist_ok=True)
     url = f"{COMFYUI_URL}/view?filename={filename}&subfolder={subfolder}&type=output"
-    urllib.request.urlretrieve(url, str(output_path))
-    
-    size_kb = output_path.stat().st_size / 1024
-    print(f"  Saved: {output_path.name} ({size_kb:.0f} KB)")
+    urllib.request.urlretrieve(url, str(out_path))
 
 
-def check_server():
-    """Check if ComfyUI server is running."""
+def server_ok():
     try:
-        resp = urllib.request.urlopen(f"{COMFYUI_URL}/system_stats", timeout=5)
-        data = json.loads(resp.read())
-        gpu = data.get("devices", [{}])[0].get("name", "unknown")
-        print(f"  ComfyUI server: OK")
-        print(f"  GPU: {gpu}")
-        return True
+        with urllib.request.urlopen(f"{COMFYUI_URL}/system_stats", timeout=5) as r:
+            d = json.loads(r.read())
+            gpu = d.get("devices", [{}])[0].get("name", "?")
+            print(f"ComfyUI: OK   GPU: {gpu}")
+            return True
     except Exception as e:
-        print(f"  ComfyUI server: NOT AVAILABLE ({e})")
-        print(f"  Start it with:")
-        print(f'    python main.py --listen 127.0.0.1 --port 8188 --base-directory "C:\\Users\\mktel\\Documents\\ComfyUI"')
+        print(f"ComfyUI: NOT AVAILABLE ({e})")
         return False
 
 
+def filter_jobs(prompts, category, langs):
+    """Filter the master prompt list by category and language."""
+    out = []
+    for p in prompts:
+        # job ids look like:
+        #   letters_<lang>_<key>     numbers_<key>     animals_<key>
+        if category != "all":
+            if not p["id"].startswith(category):
+                continue
+        if langs and p["id"].startswith("letters_"):
+            # letters_<lang>_<key>  — second segment is lang
+            lang = p["id"].split("_", 2)[1]
+            if lang not in langs:
+                continue
+        out.append(p)
+    return out
+
+
 def main():
-    import argparse
-    parser = argparse.ArgumentParser(description="Generate educational images via ComfyUI API")
-    parser.add_argument("--category", choices=["letters_pl", "letters_en", "numbers", "animals", "all"],
-                        default="all", help="Category to generate")
-    parser.add_argument("--dry-run", action="store_true", help="Show prompts without generating")
-    parser.add_argument("--seed", type=int, default=42, help="Random seed for reproducibility")
+    parser = argparse.ArgumentParser(description="Generate flashcard images via ComfyUI / Qwen-Image")
+    parser.add_argument("--category", default="all",
+                        choices=["all", "letters", "numbers", "animals"])
+    parser.add_argument("--lang", default="all",
+                        help=f"For category=letters: comma-separated codes ({','.join(LANGUAGES)}) or 'all'")
+    parser.add_argument("--width", type=int, default=IMAGE_CONFIG.get("width", 768))
+    parser.add_argument("--height", type=int, default=IMAGE_CONFIG.get("height", 768))
+    parser.add_argument("--steps", type=int, default=IMAGE_CONFIG.get("steps", 8))
+    parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--skip-existing", action="store_true", default=True,
-                        help="Skip images that already exist")
+                        help="Skip files that already exist (size > 1 KB)")
+    parser.add_argument("--no-skip", dest="skip_existing", action="store_false",
+                        help="Regenerate even when output exists")
+    parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
 
+    langs = None if args.lang == "all" else set(args.lang.split(","))
     all_prompts = get_all_image_prompts()
-
-    if args.category != "all":
-        all_prompts = [p for p in all_prompts if p["id"].startswith(args.category)]
+    jobs = filter_jobs(all_prompts, args.category, langs)
 
     print(f"\n{'='*60}")
-    print(f"Teach Your Kids — Image Generator (ComfyUI API)")
+    print(f"Teach Your Kids — Image Generator (Qwen-Image)")
     print(f"{'='*60}")
-    print(f"Category: {args.category}")
-    print(f"Total images: {len(all_prompts)}")
-    print(f"Output: {OUTPUT_DIR}")
-    print(f"Seed: {args.seed}")
+    print(f"Category: {args.category}   Langs: {args.lang}")
+    print(f"Total jobs: {len(jobs)}   Output: {OUTPUT_DIR}")
+    print(f"{args.width}x{args.height}, {args.steps} steps, base seed={args.seed}")
     print(f"{'='*60}\n")
 
     if args.dry_run:
-        for p in all_prompts:
-            print(f"[{p['id']}]")
-            print(f"  File: {p['filename']}")
-            print(f"  Prompt: {p['prompt'][:120]}...")
-            print()
-        print(f"DRY RUN: {len(all_prompts)} images would be generated.")
+        for p in jobs[:30]:
+            print(f"[{p['id']}] -> {p['filename']}")
+            print(f"  {p['prompt'][:120]}...")
+        if len(jobs) > 30:
+            print(f"\n(+{len(jobs) - 30} more)")
         return
 
-    if not check_server():
+    if not server_ok():
         sys.exit(1)
 
     client_id = str(uuid.uuid4())
-    generated = 0
-    skipped = 0
+    generated = skipped = 0
     errors = []
+    started = time.time()
 
-    for i, p in enumerate(all_prompts):
-        output_path = OUTPUT_DIR / p["filename"]
+    for i, p in enumerate(jobs):
+        out_path = OUTPUT_DIR / p["filename"]
 
-        if args.skip_existing and output_path.exists() and output_path.stat().st_size > 1000:
-            print(f"[{i+1}/{len(all_prompts)}] SKIP (exists): {p['filename']}")
+        if args.skip_existing and out_path.exists() and out_path.stat().st_size > 1000:
+            print(f"[{i+1}/{len(jobs)}] SKIP: {p['filename']}")
             skipped += 1
             continue
 
-        print(f"\n[{i+1}/{len(all_prompts)}] Generating: {p['id']}")
-        print(f"  Prompt: {p['prompt'][:100]}...")
-
+        print(f"\n[{i+1}/{len(jobs)}] {p['id']}")
+        print(f"  -> {p['filename']}")
         try:
-            start = time.time()
-
-            workflow = build_workflow(
-                prompt_text=p["prompt"],
-                seed=args.seed + i,
-                width=IMAGE_CONFIG["width"],
-                height=IMAGE_CONFIG["height"],
-                steps=IMAGE_CONFIG["steps"],
+            t0 = time.time()
+            wf = build_workflow(
+                prompt=p["prompt"], neg=NEG,
+                width=args.width, height=args.height,
+                seed=args.seed + i, steps=args.steps,
             )
-
-            prompt_id = queue_prompt(workflow, client_id)
-            print(f"  Queued: {prompt_id[:8]}...")
-
-            result = wait_for_completion(prompt_id, timeout=300)
-
-            # Extract generated image info from result
-            outputs = result.get("outputs", {})
-            for node_id, node_output in outputs.items():
-                if "images" in node_output:
-                    for img_info in node_output["images"]:
-                        download_image(
-                            filename=img_info["filename"],
-                            subfolder=img_info.get("subfolder", ""),
-                            output_path=output_path,
-                        )
-
-            elapsed = time.time() - start
-            print(f"  Time: {elapsed:.1f}s")
-            generated += 1
-
+            pid = queue_prompt(wf, client_id)
+            result = wait_for(pid, timeout=600)
+            saved = False
+            for _, node_out in result.get("outputs", {}).items():
+                for img in node_out.get("images", []):
+                    download(img["filename"], img.get("subfolder", ""), out_path)
+                    saved = True
+            if saved:
+                size_kb = out_path.stat().st_size / 1024
+                print(f"  Saved ({size_kb:.0f} KB) in {time.time()-t0:.1f}s")
+                generated += 1
+            else:
+                errors.append((p["id"], "no image in output"))
         except Exception as e:
-            import traceback
             print(f"  ERROR: {e}")
-            traceback.print_exc()
-            errors.append({"id": p["id"], "error": str(e)})
+            errors.append((p["id"], str(e)))
 
+    elapsed = time.time() - started
     print(f"\n{'='*60}")
-    print(f"DONE!")
+    print(f"DONE in {elapsed/60:.1f} min")
     print(f"  Generated: {generated}")
     print(f"  Skipped:   {skipped}")
     print(f"  Errors:    {len(errors)}")
     if errors:
-        print(f"\nErrors:")
-        for e in errors:
-            print(f"  [{e['id']}] {e['error']}")
+        print("\nErrors:")
+        for eid, msg in errors[:20]:
+            print(f"  [{eid}] {msg}")
     print(f"{'='*60}")
 
 

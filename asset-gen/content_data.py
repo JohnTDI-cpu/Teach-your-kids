@@ -303,11 +303,15 @@ NUMBER_STYLE_PREFIX = (
 )
 
 IMAGE_CONFIG = {
-    "model_path": "black-forest-labs/FLUX.2-klein-4B",
+    # Qwen-Image GGUF + Lightning 8-step LoRA — same pipeline as menu graphics
+    "unet": "qwen-image-2512-Q6_K.gguf",
+    "clip": "qwen_2.5_vl_7b_fp8_scaled.safetensors",
+    "vae":  "qwen_image_vae.safetensors",
+    "lora": "Qwen-Image-Lightning-8steps-V2.0-bf16.safetensors",
     "width": 768,
     "height": 768,
-    "steps": 20,
-    "guidance_scale": 3.5,
+    "steps": 8,
+    "guidance_scale": 1.0,  # Lightning LoRA wants very low CFG
     "output_format": "webp",
     "webp_quality": 90,
 }
