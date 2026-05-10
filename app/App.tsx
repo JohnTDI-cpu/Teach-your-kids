@@ -93,9 +93,18 @@ function FlashcardGame({ category, onBack }: { category: CategoryId; onBack: () 
 
   const [currentItem, setCurrentItem] = useState<MergedItem | null>(null);
   const [isAudioPlaying, setIsAudioPlaying] = useState(false);
+  // Mirror of isAudioPlaying for synchronous lookup during a tap. Without
+  // it, two taps in the same frame both see the stale closure value and
+  // both pickNext — so the kid skips a card mid-playback.
+  const isLockedRef = useRef(false);
   const soundRef = useRef<Audio.Sound | null>(null);
   const audioFallbackRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastIndexRef = useRef<number>(-1);
+
+  const setLocked = useCallback((locked: boolean) => {
+    isLockedRef.current = locked;
+    setIsAudioPlaying(locked);
+  }, []);
 
   const scaleAnim = useRef(new Animated.Value(1)).current;
   // Per-character (not per-word) animations for the falling letters effect.
@@ -181,38 +190,47 @@ function FlashcardGame({ category, onBack }: { category: CategoryId; onBack: () 
     }
     clearAudioFallback();
     const resolved = resolveAudioSource(item);
-    if (!resolved) { setIsAudioPlaying(false); return; }
-    setIsAudioPlaying(true);
+    if (!resolved) {
+      // No audio for this item — keep the gate locked just long enough
+      // for the falling-letters animation (~750ms) so the kid can't
+      // immediately tap past it.
+      setTimeout(() => setLocked(false), 800);
+      return;
+    }
     try {
       const { sound } = await Audio.Sound.createAsync(resolved.source, { shouldPlay: true });
       soundRef.current = sound;
       // Watchdog: malformed mp3 / driver hiccup could mean didJustFinish
       // never fires. Release the gate after 9 s so the kid can move on.
       audioFallbackRef.current = setTimeout(() => {
-        setIsAudioPlaying(false);
+        setLocked(false);
         audioFallbackRef.current = null;
       }, 9000);
       sound.setOnPlaybackStatusUpdate((status: AVPlaybackStatus) => {
         if (!status.isLoaded) {
-          if ((status as any).error) { setIsAudioPlaying(false); clearAudioFallback(); }
+          if ((status as any).error) { setLocked(false); clearAudioFallback(); }
           return;
         }
-        if (status.didJustFinish) { setIsAudioPlaying(false); clearAudioFallback(); }
+        if (status.didJustFinish) { setLocked(false); clearAudioFallback(); }
       });
     } catch (e) {
       console.warn('audio play error', e);
-      setIsAudioPlaying(false);
+      setLocked(false);
       clearAudioFallback();
     }
-  }, []);
+  }, [setLocked]);
 
   const pickNext = useCallback(() => {
     const next = getRandomItem();
     if (!next) return;
+    // Lock the gate synchronously *before* state/render — kids tap fast
+    // and there's a ~500ms window between picking the card and the audio
+    // actually starting to play. Without this, that window leaks taps.
+    setLocked(true);
     setCurrentItem(next);
     animateChange(next.caption || next.primary);
     setTimeout(() => playAudioFor(next), 350);
-  }, [getRandomItem, animateChange, playAudioFor]);
+  }, [getRandomItem, animateChange, playAudioFor, setLocked]);
 
   useEffect(() => {
     pickNext();
@@ -223,7 +241,9 @@ function FlashcardGame({ category, onBack }: { category: CategoryId; onBack: () 
   }, []);
 
   const onCardPress = useCallback(() => {
-    if (isAudioPlaying) {
+    // Synchronous check via ref — two taps in the same frame both miss
+    // the gate if we read state through a stale closure.
+    if (isLockedRef.current) {
       lockShake.setValue(0);
       Animated.sequence([
         Animated.timing(lockShake, { toValue: 8, duration: 60, useNativeDriver: true }),
@@ -235,7 +255,7 @@ function FlashcardGame({ category, onBack }: { category: CategoryId; onBack: () 
       return;
     }
     pickNext();
-  }, [isAudioPlaying, pickNext, lockShake]);
+  }, [pickNext, lockShake]);
 
   if (!currentItem) {
     return (
