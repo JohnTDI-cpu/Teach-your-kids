@@ -1,88 +1,156 @@
 # 🍎 Teach Your Kids
 
-An educational, bilingual flashcard application designed for toddlers. Built with **React Native (Expo)** and powered by an **AI-driven asset generation pipeline**.
+Educational flashcard app for toddlers — **7 languages**, **AI-generated assets**, **parent-supervised content**.
 
-[![Bilingual: PL/EN](https://img.shields.io/badge/Language-Polish%20%2F%20English-blue)](#)
-[![Tech: React Native](https://img.shields.io/badge/Tech-React%20Native%20%2F%20Expo-green)](#)
-[![AI: Flux.2 & Piper](https://img.shields.io/badge/AI-Flux.2%20%2F%20Piper%20TTS-orange)](#)
+> **Status: early beta.** Under active development. Several illustrations, some 3D buttons and a handful of animal sounds are still being iterated on.
 
----
+[![Download APK](https://img.shields.io/badge/Download-Latest_APK-brightgreen?style=for-the-badge&logo=android)](https://github.com/JohnTDI-cpu/Teach-your-kids/releases/latest)
 
-## 🌟 Overview
-
-**Teach Your Kids** is designed to provide a safe, interactive, and educational experience for the youngest users. It uses high-quality visual and auditory assets to help children learn colors, letters, numbers, and animal sounds in both **Polish** and **English**.
-
-### Key Features
-- 🌍 **Bilingual Learning**: Seamlessly switch between Polish and English.
-- 🎨 **Rich Visuals**: AI-generated 3D-style illustrations optimized for children.
-- 🔊 **Clear Audio**: High-quality Text-to-Speech (TTS) for every educational item.
-- 🔒 **Kiosk Mode (Android)**: Native locking mechanism to ensure children stay within the app.
-- 🦁 **Interactive Categories**:
-  - **Colors**: Full-screen vibrant colors.
-  - **Letters**: "A is for Apple" / "A jak Arbuz" with matching images.
-  - **Numbers**: Large, colorful 3D digits (0-9).
-  - **Animals**: Friendly illustrations with interactive sounds.
+[![Languages](https://img.shields.io/badge/Languages-PL_·_EN_·_DE_·_ES_·_FR_·_IT_·_UK-blue)](#)
+[![Tech](https://img.shields.io/badge/Tech-React_Native_·_Expo-green)](#)
+[![AI](https://img.shields.io/badge/AI-Qwen--Image_·_Edge_TTS_·_ElevenLabs-orange)](#)
 
 ---
 
-## 📂 Project Structure
+## What it is
 
-The repository is divided into two main parts: the mobile application and the asset generation pipeline.
+**Teach Your Kids** is a two-layer flashcard app for kids aged 2–4. The child sees full-screen flashcards (letters, numbers, colors, animals) with AI-illustrated images and clear voiceover. Behind a PIN-protected gate, the parent shapes exactly what their child sees — rename items, add their own flashcards, record their own voice for any item, and swap any image from camera or gallery.
+
+<table>
+  <tr>
+    <td align="center" colspan="3"><img src="screenshots/menu.png" alt="Welcome screen — Child / Parent role pick" width="220" /></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="screenshots/animal-pig.png" alt="Animal flashcard — pig (EN)" width="220" /></td>
+    <td align="center"><img src="screenshots/number-8.png" alt="Number flashcard — eight (EN)" width="220" /></td>
+    <td align="center"><img src="screenshots/color-blue.png" alt="Color flashcard — blue (audio playing)" width="220" /></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Animal flashcard</sub></td>
+    <td align="center"><sub>Number flashcard</sub></td>
+    <td align="center"><sub>Color (audio playing → tap is locked)</sub></td>
+  </tr>
+</table>
+
+---
+
+## Two layers
+
+### 👶 Child mode — what your kid uses
+
+- Big touch targets, Sesame Street-style falling letters, single tap to advance
+- **Tap-during-playback is locked**: kids tap fast, but flashcards won't skip mid-audio — the card "wiggles" instead, and only advances after the audio finishes
+- Per-language profile — switching language changes the UI, the flashcard set, and the voiceover all at once
+
+### 👨‍👩‍👧 Parent mode — PIN-gated panel
+
+The parent supervises and curates the child's content directly:
+
+- **Edit any built-in flashcard**: change the image (gallery, camera or built-in), record your own voice for the lector, rename the label or caption
+- **Add custom flashcards from scratch** in any category (your pet's name, grandma's photo, your kid's favorite toy)
+- **Hide / restore** any item from rotation
+- **Per-category label overrides** — "Animals" can become "Our Pets" if you like
+- **Settings**: PIN, language
+
+<p align="center">
+  <img src="screenshots/parent-edit-number.png" alt="Parent panel — editing the digit 8 flashcard" width="280" />
+  <br><sub>Parent panel — change image (gallery / camera), edit text + caption, record a custom voice, hide the card</sub>
+</p>
+
+---
+
+## Languages & categories
+
+**7 supported languages**: Polish, English, German, Spanish, French, Italian, Ukrainian. Each language ships its own letter alphabet (with native words for each letter), translated number/color/animal labels, and TTS voiceover.
+
+| Category | What's inside |
+|---|---|
+| **Letters** | Per-language alphabet with kid-friendly words. PL: *„A jak Arbuz"*. EN: *„A is for Apple"*. UK: *„А — Авокадо"*. |
+| **Numbers** | 0–9 with localized number words |
+| **Colors** | Full-screen vibrant swatches with localized names |
+| **Animals** | 11 farm animals with cartoon-style sound effects |
+
+---
+
+## How the assets are made
+
+The repo ships with everything it needs — but every asset is regeneratable from `asset-gen/`.
+
+| What | How |
+|------|-----|
+| **Flashcard images** | [Qwen-Image](https://github.com/QwenLM) GGUF + Lightning 8-step LoRA via ComfyUI |
+| **Lector voiceover** | [Edge TTS](https://github.com/rany2/edge-tts) — neural voices per language (PL Zofia, EN Ana, DE Katja, ES Dalia, FR Eloise, IT Isabella, UK Polina) |
+| **Animal SFX** | [ElevenLabs Sound Effects API](https://elevenlabs.io/sound-effects) — prompt-engineered cartoon sounds (e.g. *„cute cartoon duck quacking quack quack quack, children's animated TV show"*) |
+| **Menu / 3D buttons** | Qwen-Image — same pipeline as flashcards, different prompts |
+
+`asset-gen/content_data.py` is the single source of truth: letters, words, translations, image prompts, voice config — one file. Adding a new language ≈ adding one block + running the scripts.
+
+---
+
+## Project structure
 
 ```text
 .
-├── app/                  # React Native / Expo Mobile Application
-│   ├── android/          # Native Android modules (Kiosk Mode implementation)
-│   ├── assets/           # Generated images and audio files
-│   ├── App.tsx           # Main application logic
-│   └── AssetMap.ts       # Central mapping for dynamic asset loading
+├── app/                       # React Native / Expo
+│   ├── App.tsx                # Child mode + PIN gate + root navigation
+│   ├── ParentApp.tsx          # Parent panel (recording editor, custom items, settings)
+│   ├── AppContext.tsx         # i18n + per-language profile state
+│   ├── state.ts               # Persisted state (AsyncStorage) + file I/O helpers
+│   ├── AssetMap.ts            # Static asset registry generated from assets/
+│   ├── Buttons.tsx            # 3D PillButton / RoundButton components
+│   ├── i18n.ts                # UI string translations (7 languages)
+│   └── assets/                # Pre-generated images + audio (committed)
+│       ├── images/{letters,numbers,animals}/...
+│       └── audio/{pl,en,de,es,fr,it,uk}/...
 │
-└── asset-gen/            # Python Asset Generation Pipeline
-    ├── content_data.py   # Source of truth: All words, translations, and prompts
-    ├── generate_images.py # FLUX.2 based image generation script
-    ├── generate_audio.py  # Piper (ONNX) based TTS generation script
-    ├── export_json.py    # Syncs content data for app consumption
-    └── tts_models/       # Local ONNX models for offline TTS generation
+└── asset-gen/                 # Python regeneration pipeline
+    ├── content_data.py        # Single source of truth
+    ├── generate_images.py     # Qwen-Image flashcard graphics
+    ├── generate_menu.py       # Menu / 3D button graphics
+    ├── generate_audio.py      # Edge TTS voiceover for all 7 languages
+    ├── fetch_animal_sounds.py # ElevenLabs SFX for animal sounds
+    └── export_json.py         # Sync content data into the app
 ```
 
 ---
 
-## 🚀 How It Works
+## Running the app
 
-### 1. Asset Generation Pipeline (`asset-gen/`)
-Instead of manual asset creation, this project uses a specialized AI pipeline:
-- **Visuals**: Uses the **FLUX.2-klein-4B** model to generate consistent, high-quality educational illustrations.
-- **Audio**: Uses **Piper TTS** with high-quality Polish (`pl_PL-gosia-medium`) and English (`en_US-lessac-medium`) models.
-- **Logic**: `content_data.py` contains all definitions. Running the generation scripts automatically populates the `app/assets` directory.
+### Development
 
-### 2. Mobile App (`app/`)
-- **React Native + Expo**: Provides a smooth, cross-platform experience.
-- **Native Kiosk Mode**: A custom Kotlin implementation in the Android folder allows the app to act as a "Device Owner" or use "Screen Pinning" to prevent the child from exiting the app or accessing device settings.
-
----
-
-## 🛠️ Setup & Development
-
-### Prerequisites
-- **Mobile**: Node.js, Expo Go, Android Studio (for native features).
-- **Asset Gen**: Python 3.10+, PyTorch (for image gen), Piper (for audio).
-
-### Running the App
 ```bash
 cd app
 npm install
-npx expo start
+npx expo run:android        # build + install on connected Android device
+# or
+npx expo start              # for use with Expo Go
 ```
 
-### Generating Assets
+The first Android build takes 5–10 min (gradle compiles native dependencies — reanimated, gesture-handler, expo-av). Subsequent runs use Metro Fast Refresh.
+
+### Regenerating assets (optional)
+
+Requires Python 3.10+, ffmpeg, ComfyUI for image generation, and an ElevenLabs API key for animal SFX.
+
 ```bash
 cd asset-gen
-# Configure your local model paths in content_data.py
-python generate_images.py
-python generate_audio.py
+python generate_images.py --category animals
+python generate_audio.py --kind animal
+$env:ELEVENLABS_API_KEY = "sk_..."
+python fetch_animal_sounds.py
 ```
 
 ---
 
-## 📝 License
-This project is for educational purposes. All AI-generated assets are subject to the licenses of their respective models (Flux.2, Piper).
+## Roadmap
+
+- Polishing letter and animal illustrations across all 7 languages — some still placeholder-quality
+- More granular per-item voice options in the parent panel
+- iOS testing (development is currently Android-first)
+- Considering a small completion-tracking loop, without going gamified
+
+---
+
+## License
+
+Educational use. AI-generated assets are subject to their respective model licenses (Qwen-Image, Edge TTS terms, ElevenLabs SFX).
