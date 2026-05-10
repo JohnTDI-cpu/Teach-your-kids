@@ -2,7 +2,7 @@
 
 Educational flashcard app for toddlers — **7 languages**, **AI-generated assets**, **parent-supervised content**.
 
-> **Status: early beta.** Under active development. Several illustrations, some 3D buttons and a handful of animal sounds are still being iterated on.
+> **Status: early beta — testing phase.** Currently being shared with a small group of testers for feedback. Several illustrations, some 3D buttons and a handful of animal sounds are still being iterated on. **Public release on Google Play and the Apple App Store is planned** once content quality is finalized.
 
 [![Download APK](https://img.shields.io/badge/Download-Latest_APK-brightgreen?style=for-the-badge&logo=android)](https://github.com/JohnTDI-cpu/Teach-your-kids/releases/latest)
 
@@ -148,6 +148,7 @@ python fetch_animal_sounds.py
 - More granular per-item voice options in the parent panel
 - iOS testing (development is currently Android-first)
 - Considering a small completion-tracking loop, without going gamified
+- **Public release on Google Play Store and Apple App Store** after the current testing phase wraps up
 
 ---
 
