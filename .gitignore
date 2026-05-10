@@ -42,6 +42,11 @@ yarn-error.*
 **/local.properties
 **/GeneratedPluginRegistrant.java
 
+# Release artifacts (uploaded to GitHub Releases, not committed)
+*.apk
+*.aab
+release-notes-*.md
+
 # Python
 __pycache__/
 *.py[cod]
