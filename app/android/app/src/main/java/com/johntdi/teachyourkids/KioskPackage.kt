@@ -1,4 +1,4 @@
-package com.teachyourkids.app
+package com.johntdi.teachyourkids
 
 import com.facebook.react.ReactPackage
 import com.facebook.react.bridge.NativeModule

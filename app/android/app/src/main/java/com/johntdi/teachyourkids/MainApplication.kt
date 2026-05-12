@@ -1,4 +1,4 @@
-package com.teachyourkids.app
+package com.johntdi.teachyourkids
 
 import android.app.Application
 import android.content.res.Configuration

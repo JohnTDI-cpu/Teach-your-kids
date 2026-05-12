@@ -1,4 +1,4 @@
-package com.teachyourkids.app
+package com.johntdi.teachyourkids
 
 import android.app.Activity
 import android.app.ActivityManager

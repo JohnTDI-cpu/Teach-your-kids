@@ -1,4 +1,4 @@
-package com.teachyourkids.app
+package com.johntdi.teachyourkids
 
 import android.os.Build
 import android.os.Bundle
