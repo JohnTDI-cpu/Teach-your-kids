@@ -48,7 +48,9 @@ type StringKey =
   | 'settings_title' | 'settings_language' | 'settings_language_warn'
   | 'settings_pin_label'
   | 'settings_categories_label'
-  | 'item_not_found' | 'recording_error' | 'error_generic';
+  | 'item_not_found' | 'recording_error' | 'error_generic'
+  | 'folders_label' | 'folder_add' | 'folder_name_placeholder'
+  | 'folder_delete_title' | 'folder_delete_msg';
 
 type StringTable = Record<StringKey, string>;
 
@@ -132,6 +134,7 @@ export const STRINGS: Record<LanguageCode, StringTable> = {
     settings_pin_label: '🔑 Kod PIN rodzica',
     settings_categories_label: '✏️ Nazwy kategorii',
     item_not_found: 'Nie znaleziono.', recording_error: 'Błąd nagrywania', error_generic: 'Błąd',
+    folders_label: '📁 Twoje foldery', folder_add: '➕ Nowy folder', folder_name_placeholder: 'np. Owoce / Ubrania', folder_delete_title: 'Usunąć folder?', folder_delete_msg: 'Folder i wszystkie fiszki w nim zostaną usunięte na stałe.',
   },
   en: {
     loading: 'Loading…',
@@ -210,6 +213,7 @@ export const STRINGS: Record<LanguageCode, StringTable> = {
     settings_pin_label: '🔑 Parent PIN',
     settings_categories_label: '✏️ Category names',
     item_not_found: 'Not found.',     recording_error: 'Recording error',  error_generic: 'Error',
+    folders_label: '📁 Your folders', folder_add: '➕ New folder', folder_name_placeholder: 'e.g. Fruits / Clothes', folder_delete_title: 'Delete folder?', folder_delete_msg: 'The folder and all its flashcards will be permanently removed.',
   },
   de: {
     loading: 'Lädt…',
@@ -287,6 +291,7 @@ export const STRINGS: Record<LanguageCode, StringTable> = {
     settings_pin_label: '🔑 Eltern-PIN',
     settings_categories_label: '✏️ Kategorienamen',
     item_not_found: 'Nicht gefunden.', recording_error: 'Aufnahmefehler',  error_generic: 'Fehler',
+    folders_label: '📁 Deine Ordner', folder_add: '➕ Neuer Ordner', folder_name_placeholder: 'z.B. Obst / Kleidung', folder_delete_title: 'Ordner löschen?', folder_delete_msg: 'Der Ordner und alle Karten darin werden dauerhaft gelöscht.',
   },
   es: {
     loading: 'Cargando…',
@@ -364,6 +369,7 @@ export const STRINGS: Record<LanguageCode, StringTable> = {
     settings_pin_label: '🔑 PIN de padres',
     settings_categories_label: '✏️ Nombres de categorías',
     item_not_found: 'No encontrado.', recording_error: 'Error de grabación', error_generic: 'Error',
+    folders_label: '📁 Tus carpetas', folder_add: '➕ Nueva carpeta', folder_name_placeholder: 'p.ej. Frutas / Ropa', folder_delete_title: '¿Eliminar carpeta?', folder_delete_msg: 'La carpeta y todas sus tarjetas se eliminarán permanentemente.',
   },
   fr: {
     loading: 'Chargement…',
@@ -441,6 +447,7 @@ export const STRINGS: Record<LanguageCode, StringTable> = {
     settings_pin_label: '🔑 Code parent',
     settings_categories_label: '✏️ Noms des catégories',
     item_not_found: 'Introuvable.',   recording_error: 'Erreur d\'enregistrement', error_generic: 'Erreur',
+    folders_label: '📁 Tes dossiers', folder_add: '➕ Nouveau dossier', folder_name_placeholder: 'ex. Fruits / Vêtements', folder_delete_title: 'Supprimer le dossier ?', folder_delete_msg: 'Le dossier et toutes ses cartes seront supprimés définitivement.',
   },
   it: {
     loading: 'Caricamento…',
@@ -518,6 +525,7 @@ export const STRINGS: Record<LanguageCode, StringTable> = {
     settings_pin_label: '🔑 PIN genitori',
     settings_categories_label: '✏️ Nomi categorie',
     item_not_found: 'Non trovato.',  recording_error: 'Errore di registrazione', error_generic: 'Errore',
+    folders_label: '📁 Le tue cartelle', folder_add: '➕ Nuova cartella', folder_name_placeholder: 'es. Frutta / Vestiti', folder_delete_title: 'Eliminare la cartella?', folder_delete_msg: 'La cartella e tutte le sue carte saranno eliminate definitivamente.',
   },
   uk: {
     loading: 'Завантаження…',
@@ -595,6 +603,7 @@ export const STRINGS: Record<LanguageCode, StringTable> = {
     settings_pin_label: '🔑 Батьківський PIN',
     settings_categories_label: '✏️ Назви категорій',
     item_not_found: 'Не знайдено.', recording_error: 'Помилка запису',  error_generic: 'Помилка',
+    folders_label: '📁 Твої папки', folder_add: '➕ Нова папка', folder_name_placeholder: 'напр. Фрукти / Одяг', folder_delete_title: 'Видалити папку?', folder_delete_msg: 'Папка та всі картки в ній буде видалено назавжди.',
   },
 };
 

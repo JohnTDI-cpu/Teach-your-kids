@@ -82,7 +82,7 @@ function resolveImageSource(item: MergedItem): any {
    FLASHCARD — child mode
 ============================================================ */
 
-function FlashcardGame({ category, onBack }: { category: CategoryId; onBack: () => void }) {
+function FlashcardGame({ category, onBack }: { category: string; onBack: () => void }) {
   const { state, lang, t } = useApp();
   const { width, height, isLandscape, rs } = useDevice();
 
@@ -362,7 +362,7 @@ const TILE_DEFS: { id: CategoryId; defaultIcon: string; color: string; menuAsset
   { id: 'colors',  defaultIcon: '🎨', color: '#E91E63', menuAsset: 'bg_colors.webp' },
 ];
 
-function ChildMenu({ onSelect, onBack }: { onSelect: (cat: CategoryId) => void; onBack: () => void }) {
+function ChildMenu({ onSelect, onBack }: { onSelect: (cat: string) => void; onBack: () => void }) {
   const { profile, t } = useApp();
   const { width, height, isLandscape, rs } = useDevice();
   const mainBg = MenuAssets['bg_main.webp'];
@@ -376,6 +376,25 @@ function ChildMenu({ onSelect, onBack }: { onSelect: (cat: CategoryId) => void; 
   const iconSize = rs(42, 54);
   const catTextSize = rs(18, 26);
   const titleSize = rs(20, 26);
+
+  // Built-in tiles minus anything the parent hid in Settings, plus the
+  // parent-defined folders. Each tile renders identically — only the
+  // image background differs (built-ins have a Qwen background; custom
+  // folders fall back to a coloured rect).
+  const hidden = profile.hiddenCategories ?? [];
+  const tiles: Array<{
+    id: string; icon: string; color: string; label: string; bgAsset?: string | null;
+  }> = [];
+  for (const t of TILE_DEFS) {
+    if (hidden.includes(t.id)) continue;
+    tiles.push({
+      id: t.id, icon: t.defaultIcon, color: t.color,
+      label: profile.categoryLabels[t.id], bgAsset: t.menuAsset,
+    });
+  }
+  for (const cc of profile.customCategories) {
+    tiles.push({ id: cc.id, icon: cc.emoji, color: cc.color, label: cc.name });
+  }
 
   return (
     <ImageBackground
@@ -393,9 +412,8 @@ function ChildMenu({ onSelect, onBack }: { onSelect: (cat: CategoryId) => void; 
       </Text>
 
       <View style={[styles.gridContainer, { gap: isLandscape ? 16 : 12 }]}>
-        {TILE_DEFS.map((tile) => {
-          const tileBg = tile.menuAsset ? MenuAssets[tile.menuAsset] : null;
-          const label = profile.categoryLabels[tile.id];
+        {tiles.map((tile) => {
+          const tileBg = tile.bgAsset ? MenuAssets[tile.bgAsset] : null;
           return (
             <TouchableOpacity
               key={tile.id}
@@ -411,13 +429,13 @@ function ChildMenu({ onSelect, onBack }: { onSelect: (cat: CategoryId) => void; 
                   resizeMode="cover"
                 >
                   <View style={styles.tileScrim} />
-                  <Text style={[styles.categoryIcon, styles.tileText, { fontSize: iconSize }]}>{tile.defaultIcon}</Text>
-                  <Text style={[styles.categoryText, styles.tileText, { fontSize: catTextSize }]}>{label}</Text>
+                  <Text style={[styles.categoryIcon, styles.tileText, { fontSize: iconSize }]}>{tile.icon}</Text>
+                  <Text style={[styles.categoryText, styles.tileText, { fontSize: catTextSize }]}>{tile.label}</Text>
                 </ImageBackground>
               ) : (
                 <View style={styles.tileBg}>
-                  <Text style={[styles.categoryIcon, { fontSize: iconSize }]}>{tile.defaultIcon}</Text>
-                  <Text style={[styles.categoryText, { fontSize: catTextSize }]}>{label}</Text>
+                  <Text style={[styles.categoryIcon, { fontSize: iconSize }]}>{tile.icon}</Text>
+                  <Text style={[styles.categoryText, { fontSize: catTextSize }]}>{tile.label}</Text>
                 </View>
               )}
             </TouchableOpacity>
@@ -485,7 +503,7 @@ function RootScreens() {
   const { width, isLandscape, rs } = useDevice();
 
   const [screen, setScreen] = useState<'menu' | 'child_menu' | 'flashcard' | 'parent'>('menu');
-  const [selectedCategory, setSelectedCategory] = useState<CategoryId>('animals');
+  const [selectedCategory, setSelectedCategory] = useState<string>('animals');
   const [showPinDialog, setShowPinDialog] = useState(false);
   const [pinInput, setPinInput] = useState('');
   const [targetScreenAfterPin, setTargetScreenAfterPin] =

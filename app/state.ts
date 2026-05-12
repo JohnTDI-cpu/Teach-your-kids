@@ -37,7 +37,7 @@ export type ItemOverrides = {
 
 export type CustomItem = {
   id: string;                    // "custom_<uuid>"
-  category: CategoryId;          // attaches to one of the built-in categories
+  category: string;              // CategoryId OR custom-category id ("cat_<uuid>")
   imageUri: string;              // file://
   label: string;                 // displayed text
   recordings: Recording[];
@@ -52,13 +52,29 @@ export type CategoryLabels = {
   colors: string;
 };
 
-/** Per-language profile — recordings, custom flashcards and category renames
- *  are isolated per language so a parent who teaches both Polish and English
- *  can keep separate datasets that don't bleed into each other. */
+/** Parent-defined folder of flashcards. Lives next to the four built-in
+ *  categories (letters/numbers/animals/colors); custom items can target it
+ *  via `customItem.category = customCategory.id`. */
+export type CustomCategory = {
+  id: string;        // "cat_<uuid>"
+  name: string;      // displayed label (parent-chosen, free text)
+  emoji: string;     // single-char/emoji shown on the tile
+  color: string;     // hex tile background
+  createdAt: number;
+};
+
+/** Per-language profile — recordings, custom flashcards, category renames
+ *  and parent-defined folders are isolated per language so a parent who
+ *  teaches both Polish and English can keep separate datasets. */
 export type LanguageProfile = {
   itemOverrides: Record<string, ItemOverrides>;
   customItems: CustomItem[];
   categoryLabels: CategoryLabels;
+  customCategories: CustomCategory[];
+  /** Built-in folders the parent hid from child mode. Custom folders are
+   *  deleted outright; built-ins can only be hidden so they can be
+   *  restored later. */
+  hiddenCategories?: CategoryId[];
 };
 
 export type PersistedState = {
@@ -116,7 +132,27 @@ function emptyProfile(lang: LanguageCode): LanguageProfile {
     itemOverrides: {},
     customItems: [],
     categoryLabels: { ...(CATEGORY_LABELS_BY_LANG[lang] || DEFAULT_LABELS) },
+    customCategories: [],
+    hiddenCategories: [],
   };
+}
+
+/** Hide a built-in category from the child mode (Settings folder list). */
+export function setCategoryHidden(
+  state: PersistedState,
+  cat: CategoryId,
+  hidden: boolean,
+): PersistedState {
+  const p = currentProfile(state);
+  const current = p.hiddenCategories ?? [];
+  const next = hidden
+    ? Array.from(new Set([...current, cat]))
+    : current.filter((c) => c !== cat);
+  return patchProfile(state, { hiddenCategories: next });
+}
+
+export function isCategoryHidden(profile: LanguageProfile, cat: CategoryId): boolean {
+  return (profile.hiddenCategories ?? []).includes(cat);
 }
 
 function defaultProfiles(): Record<LanguageCode, LanguageProfile> {
@@ -154,6 +190,8 @@ export async function loadState(): Promise<PersistedState> {
         itemOverrides: old.itemOverrides || {},
         customItems: old.customItems || [],
         categoryLabels: { ...DEFAULT_LABELS, ...(old.categoryLabels || {}) },
+        customCategories: [],
+        hiddenCategories: [],
       };
       const migrated: PersistedState = {
         language: old.language || 'pl',
@@ -320,6 +358,61 @@ export function setLanguage(state: PersistedState, language: LanguageCode): Pers
   return { ...state, language, profiles };
 }
 
+/* ---------- custom categories (parent-defined folders) ---------- */
+
+/** True iff this id refers to a user-defined folder (not built-in). */
+export function isCustomCategory(catId: string): boolean {
+  return catId.startsWith('cat_');
+}
+
+const FOLDER_PALETTE = ['#FF7043', '#42A5F5', '#66BB6A', '#AB47BC', '#FFA726', '#26A69A', '#EC407A', '#5C6BC0'];
+
+export function addCustomCategory(
+  state: PersistedState,
+  name: string,
+  emoji = '📁',
+): PersistedState {
+  const p = currentProfile(state);
+  const color = FOLDER_PALETTE[p.customCategories.length % FOLDER_PALETTE.length];
+  const cat: CustomCategory = {
+    id: 'cat_' + uuid(),
+    name: name.trim() || 'Nowy folder',
+    emoji,
+    color,
+    createdAt: Date.now(),
+  };
+  return patchProfile(state, { customCategories: [...p.customCategories, cat] });
+}
+
+export function renameCustomCategory(
+  state: PersistedState,
+  catId: string,
+  name: string,
+): PersistedState {
+  const p = currentProfile(state);
+  return patchProfile(state, {
+    customCategories: p.customCategories.map((c) =>
+      c.id === catId ? { ...c, name: name.trim() || c.name } : c,
+    ),
+  });
+}
+
+/** Remove a folder. Custom items inside it stay in state but become
+ *  orphaned (filtered out at render time) so the parent can recover them
+ *  by re-adding a folder with the same id — handy for accidental deletes
+ *  but mostly avoided by the UI confirming first. */
+export function removeCustomCategory(
+  state: PersistedState,
+  catId: string,
+): PersistedState {
+  const p = currentProfile(state);
+  return patchProfile(state, {
+    customCategories: p.customCategories.filter((c) => c.id !== catId),
+    // also drop any custom items that lived in that folder
+    customItems: p.customItems.filter((it) => it.category !== catId),
+  });
+}
+
 /* ---------- merged item view (built-in + custom) ---------- */
 
 export type MergedItem = {
@@ -355,12 +448,33 @@ export type MergedItem = {
  * only the audio/label changes.
  */
 export function buildItemsForCategory(
-  cat: CategoryId,
+  cat: CategoryId | string,
   state: PersistedState,
   language: LanguageCode = 'pl',
   options: { includeHidden?: boolean } = {},
 ): MergedItem[] {
   const out: MergedItem[] = [];
+  const profile = currentProfile(state);
+
+  // Custom (parent-defined) folder — no built-in items, just the custom
+  // flashcards filed against this folder.
+  if (isCustomCategory(cat)) {
+    for (const ci of profile.customItems) {
+      if (ci.category !== cat) continue;
+      const sel = ci.recordings.find((r) => r.id === ci.selectedRecordingId);
+      out.push({
+        id: ci.id,
+        category: cat as CategoryId,
+        isCustom: true,
+        primary: ci.label,
+        caption: ci.label,
+        imageSource: { uri: ci.imageUri },
+        customAudioUri: sel?.uri ?? null,
+        builtinAudioKey: null,
+      });
+    }
+    return out;
+  }
 
   const pickLabel = (rec: any, fallback?: string): string => {
     if (rec?.labels?.[language]) return rec.labels[language];
@@ -375,7 +489,7 @@ export function buildItemsForCategory(
     const letters = (contentData as any).letters || {};
     sourceArr = letters[language] || letters.pl || [];
   } else {
-    sourceArr = (contentData as any)[cat] || [];
+    sourceArr = (contentData as any)[cat as string] || [];
   }
 
   const pickAudioKey = (rec: any): string | null => {
@@ -404,8 +518,6 @@ export function buildItemsForCategory(
     return pickLabel(rec);
   };
 
-  const profile = currentProfile(state);
-
   for (const rec of sourceArr) {
     const ovr = profile.itemOverrides[rec.id];
     if (ovr?.hidden && !options.includeHidden) continue;
@@ -415,7 +527,7 @@ export function buildItemsForCategory(
       : rec.filename ? { __builtinImage: rec.filename } : null;
     out.push({
       id: rec.id,
-      category: cat,
+      category: cat as CategoryId,
       isCustom: false,
       primary: ovr?.customLabel?.trim() || pickPrimary(rec),
       caption: ovr?.customCaption?.trim() || pickCaption(rec),
@@ -433,7 +545,7 @@ export function buildItemsForCategory(
     const sel = ci.recordings.find((r) => r.id === ci.selectedRecordingId);
     out.push({
       id: ci.id,
-      category: cat,
+      category: cat as CategoryId,
       isCustom: true,
       primary: ci.label,
       caption: ci.label,

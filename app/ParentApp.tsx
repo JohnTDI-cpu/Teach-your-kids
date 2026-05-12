@@ -78,6 +78,13 @@ import {
   SUPPORTED_LANGUAGES,
   LanguageCode,
   currentProfile,
+  CustomCategory,
+  addCustomCategory,
+  renameCustomCategory,
+  removeCustomCategory,
+  isCustomCategory,
+  setCategoryHidden,
+  isCategoryHidden,
 } from './state';
 import { useApp } from './AppContext';
 import { PillButton, RoundButton } from './Buttons';
@@ -85,9 +92,9 @@ import { styles as appStyles, useDevice } from './App';
 
 type ParentScreen =
   | { kind: 'home' }
-  | { kind: 'category'; cat: CategoryId }
-  | { kind: 'item'; itemId: string; cat: CategoryId }
-  | { kind: 'add'; cat: CategoryId | null }
+  | { kind: 'category'; cat: string } // built-in CategoryId or custom 'cat_<uuid>'
+  | { kind: 'item'; itemId: string; cat: string }
+  | { kind: 'add'; cat: string | null }
   | { kind: 'settings' };
 
 const CATS: { id: CategoryId; emoji: string; color: string }[] = [
@@ -157,8 +164,14 @@ export function ParentApp({ onExit }: { onExit: () => void }) {
       </Text>
 
       <View style={[appStyles.gridContainer, { gap: isLandscape ? 16 : 12 }]}>
-        {CATS.map((c) => {
-          const label = profile.categoryLabels[c.id];
+        {[
+          ...CATS.map((c) => ({
+            id: c.id as string, label: profile.categoryLabels[c.id], emoji: c.emoji, color: c.color,
+          })),
+          ...profile.customCategories.map((cc) => ({
+            id: cc.id, label: cc.name, emoji: cc.emoji, color: cc.color,
+          })),
+        ].map((c) => {
           const count = buildItemsForCategory(c.id, state, lang).length;
           return (
             <TouchableOpacity
@@ -168,7 +181,7 @@ export function ParentApp({ onExit }: { onExit: () => void }) {
             >
               <View style={appStyles.tileBg}>
                 <Text style={[appStyles.categoryIcon, { fontSize: iconSize }]}>{c.emoji}</Text>
-                <Text style={[appStyles.categoryText, { fontSize: catTextSize }]}>{label}</Text>
+                <Text style={[appStyles.categoryText, { fontSize: catTextSize }]}>{c.label}</Text>
                 <Text style={{ color: '#fff', fontSize: rs(12, 15) }}>{tn('count_items', { n: count })}</Text>
               </View>
             </TouchableOpacity>
@@ -194,7 +207,7 @@ function CategoryView({
   onOpenItem,
   onAddCustom,
 }: {
-  cat: CategoryId;
+  cat: string;
   onBack: () => void;
   onOpenItem: (itemId: string) => void;
   onAddCustom: () => void;
@@ -202,7 +215,9 @@ function CategoryView({
   const { state, persist, lang, profile, t } = useApp();
   const { rs } = useDevice();
   const items = useMemo(() => buildItemsForCategory(cat, state, lang, { includeHidden: true }), [cat, state, lang]);
-  const label = profile.categoryLabels[cat];
+  const label = isCustomCategory(cat)
+    ? (profile.customCategories.find((c) => c.id === cat)?.name ?? '')
+    : profile.categoryLabels[cat as CategoryId];
 
   const onLongPressDelete = useCallback(
     (item: MergedItem) => {
@@ -317,7 +332,7 @@ function ItemEditor({
   onBack,
 }: {
   itemId: string;
-  cat: CategoryId;
+  cat: string;
   onBack: () => void;
 }) {
   const { state, persist, lang, profile, t, tn } = useApp();
@@ -801,13 +816,13 @@ function AddCustomItem({
   defaultCat,
   onBack,
 }: {
-  defaultCat: CategoryId | null;
+  defaultCat: string | null;
   onBack: () => void;
 }) {
   const { state, persist, lang, profile, t, tn } = useApp();
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [label, setLabel] = useState('');
-  const [cat, setCat] = useState<CategoryId>(defaultCat || 'animals');
+  const [cat, setCat] = useState<string>(defaultCat || 'animals');
 
   const [recording, setRecording] = useState<Audio.Recording | null>(null);
   const [isRecording, setIsRecording] = useState(false);
@@ -1040,10 +1055,17 @@ function AddCustomItem({
           maxLength={40}
         />
 
-        {/* Category picker */}
+        {/* Category picker — built-in + custom folders */}
         <Text style={parentStyles.fieldLabel}>{t('category_field')}</Text>
         <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
-          {CATS.map((c) => (
+          {[
+            ...CATS.map((c) => ({
+              id: c.id as string, label: profile.categoryLabels[c.id], emoji: c.emoji, color: c.color,
+            })),
+            ...profile.customCategories.map((cc) => ({
+              id: cc.id, label: cc.name, emoji: cc.emoji, color: cc.color,
+            })),
+          ].map((c) => (
             <TouchableOpacity
               key={c.id}
               style={[
@@ -1053,7 +1075,7 @@ function AddCustomItem({
               onPress={() => setCat(c.id)}
             >
               <Text style={[parentStyles.catChipText, cat === c.id && { color: '#fff' }]}>
-                {c.emoji} {profile.categoryLabels[c.id]}
+                {c.emoji} {c.label}
               </Text>
             </TouchableOpacity>
           ))}
@@ -1141,6 +1163,7 @@ function Settings({ onBack }: { onBack: () => void }) {
   const [labels, setLabels] = useState({ ...profile.categoryLabels });
   const [pin, setPin] = useState(state.pin);
   const [language, setLanguageState] = useState<LanguageCode>(state.language);
+  const [newFolderName, setNewFolderName] = useState('');
 
   const onSave = async () => {
     let next = state;
@@ -1206,23 +1229,97 @@ function Settings({ onBack }: { onBack: () => void }) {
           secureTextEntry
         />
 
-        {/* Category names */}
+        {/* Folder management — all built-in + custom in one list */}
         <Text style={[parentStyles.fieldLabel, { marginTop: 28 }]}>
-          {t('settings_categories_label')}
+          {t('folders_label')}
         </Text>
-        {CATS.map((c) => (
-          <View key={c.id} style={{ marginBottom: 12 }}>
-            <Text style={[parentStyles.fieldLabel, { fontSize: 14, color: '#666' }]}>
-              {c.emoji} {c.id}
-            </Text>
+        {CATS.map((c) => {
+          const hidden = isCategoryHidden(profile, c.id);
+          return (
+            <View key={c.id} style={parentStyles.folderRow}>
+              <Text style={{ fontSize: 28, marginRight: 8 }}>{c.emoji}</Text>
+              <TextInput
+                style={[parentStyles.textInput, { flex: 1 }]}
+                value={labels[c.id]}
+                onChangeText={(v) => setLabels((l) => ({ ...l, [c.id]: v }))}
+                maxLength={32}
+                placeholder={c.id}
+              />
+              <RoundButton
+                color={hidden ? 'green' : 'gray'} size={44}
+                label={hidden ? '👁' : '🙈'}
+                onPress={async () => {
+                  await persist(setCategoryHidden(state, c.id, !hidden));
+                }}
+                style={{ marginLeft: 8 }}
+              />
+            </View>
+          );
+        })}
+        {profile.customCategories.map((cc) => (
+          <View key={cc.id} style={parentStyles.folderRow}>
+            <Text style={{ fontSize: 28, marginRight: 8 }}>{cc.emoji}</Text>
             <TextInput
-              style={parentStyles.textInput}
-              value={labels[c.id]}
-              onChangeText={(v) => setLabels((l) => ({ ...l, [c.id]: v }))}
+              style={[parentStyles.textInput, { flex: 1 }]}
+              defaultValue={cc.name}
+              onEndEditing={async (e) => {
+                const v = e.nativeEvent.text.trim();
+                if (v && v !== cc.name) {
+                  await persist(renameCustomCategory(state, cc.id, v));
+                }
+              }}
               maxLength={32}
+            />
+            <RoundButton
+              color="red" size={44} label="🗑"
+              onPress={() => {
+                Alert.alert(
+                  t('folder_delete_title'),
+                  t('folder_delete_msg'),
+                  [
+                    { text: t('cancel'), style: 'cancel' },
+                    {
+                      text: t('delete_recording_btn'),
+                      style: 'destructive',
+                      onPress: async () => {
+                        // Best-effort: drop image/recording files for items in this folder
+                        const orphans = profile.customItems.filter((it) => it.category === cc.id);
+                        for (const it of orphans) {
+                          await deleteFileQuietly(it.imageUri);
+                          for (const r of it.recordings) await deleteFileQuietly(r.uri);
+                        }
+                        await persist(removeCustomCategory(state, cc.id));
+                      },
+                    },
+                  ],
+                );
+              }}
+              style={{ marginLeft: 8 }}
             />
           </View>
         ))}
+
+        {/* Add new folder */}
+        <View style={[parentStyles.folderRow, { marginTop: 8 }]}>
+          <Text style={{ fontSize: 28, marginRight: 8 }}>📁</Text>
+          <TextInput
+            style={[parentStyles.textInput, { flex: 1 }]}
+            value={newFolderName}
+            onChangeText={setNewFolderName}
+            placeholder={t('folder_name_placeholder')}
+            maxLength={32}
+          />
+          <PillButton
+            color="purple" size="sm" label={t('folder_add')}
+            onPress={async () => {
+              const v = newFolderName.trim();
+              if (!v) return;
+              await persist(addCustomCategory(state, v));
+              setNewFolderName('');
+            }}
+            style={{ marginLeft: 8 }}
+          />
+        </View>
 
         <PillButton color="green" size="lg" label={t('save')}
           onPress={onSave} style={{ alignSelf: 'center', marginTop: 24 }} />
@@ -1463,5 +1560,10 @@ const parentStyles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#ddd',
     width: '100%',
+  },
+  folderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
   },
 });

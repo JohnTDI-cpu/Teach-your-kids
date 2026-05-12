@@ -108,31 +108,14 @@ PROMPTS = [
             "warm pastel peach background, kawaii style, round friendly composition"
         ),
     },
-    # ----- Empty buttons. Qwen-image is poor at letters so we keep text in
-    # React Native and use these only as backgrounds. Each is the same shape
-    # repeated in a different colour — matching the palette already used
-    # across the app so existing layouts barely have to move. -----
-    *[
-        {
-            "filename": f"btn_pill_{name}.webp",
-            "width": 1024,
-            "height": 320,
-            "prompt": QWEN_STYLE + (
-                f"A horizontal pill-shaped 3D button, glossy plastic finish in {color_desc}, "
-                "smooth rounded edges, subtle highlight on top, soft drop shadow underneath, "
-                "centered on a pure white background, no text, no symbols, no numbers, "
-                "professional UI button asset"
-            ),
-        }
-        for name, color_desc in [
-            ("green",  "vibrant kelly green"),
-            ("blue",   "bright sky blue"),
-            ("orange", "warm sunset orange"),
-            ("purple", "vivid magenta purple"),
-            ("red",    "bright cherry red"),
-            ("gray",   "soft warm light gray"),
-        ]
-    ],
+    # ----- Pill buttons are *not* listed here. Qwen-Image kept producing
+    # three separate pill shapes or insets on a wide canvas which Metro
+    # stretched into a broken-looking button. The procedural renderer in
+    # asset-gen/generate_pill_buttons.py replaces them — deterministic
+    # aspect ratio, exact colour, runs in <1 second.
+    #
+    # Round icon buttons stay here because Qwen produces a single clean
+    # circle reliably at 512×512.
     *[
         {
             "filename": f"btn_round_{name}.webp",
