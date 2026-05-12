@@ -382,18 +382,22 @@ function ChildMenu({ onSelect, onBack }: { onSelect: (cat: string) => void; onBa
   // image background differs (built-ins have a Qwen background; custom
   // folders fall back to a coloured rect).
   const hidden = profile.hiddenCategories ?? [];
+  const logos = profile.categoryLogos ?? {};
   const tiles: Array<{
-    id: string; icon: string; color: string; label: string; bgAsset?: string | null;
+    id: string; icon: string; logoUri?: string; color: string; label: string; bgAsset?: string | null;
   }> = [];
   for (const t of TILE_DEFS) {
     if (hidden.includes(t.id)) continue;
     tiles.push({
-      id: t.id, icon: t.defaultIcon, color: t.color,
-      label: profile.categoryLabels[t.id], bgAsset: t.menuAsset,
+      id: t.id, icon: t.defaultIcon, logoUri: logos[t.id],
+      color: t.color, label: profile.categoryLabels[t.id], bgAsset: t.menuAsset,
     });
   }
   for (const cc of profile.customCategories) {
-    tiles.push({ id: cc.id, icon: cc.emoji, color: cc.color, label: cc.name });
+    tiles.push({
+      id: cc.id, icon: cc.emoji, logoUri: logos[cc.id],
+      color: cc.color, label: cc.name,
+    });
   }
 
   return (
@@ -429,12 +433,20 @@ function ChildMenu({ onSelect, onBack }: { onSelect: (cat: string) => void; onBa
                   resizeMode="cover"
                 >
                   <View style={styles.tileScrim} />
-                  <Text style={[styles.categoryIcon, styles.tileText, { fontSize: iconSize }]}>{tile.icon}</Text>
+                  {tile.logoUri ? (
+                    <Image source={{ uri: tile.logoUri }} style={[styles.tileLogo, { width: iconSize * 1.4, height: iconSize * 1.4, borderRadius: iconSize * 0.7 }]} />
+                  ) : (
+                    <Text style={[styles.categoryIcon, styles.tileText, { fontSize: iconSize }]}>{tile.icon}</Text>
+                  )}
                   <Text style={[styles.categoryText, styles.tileText, { fontSize: catTextSize }]}>{tile.label}</Text>
                 </ImageBackground>
               ) : (
                 <View style={styles.tileBg}>
-                  <Text style={[styles.categoryIcon, { fontSize: iconSize }]}>{tile.icon}</Text>
+                  {tile.logoUri ? (
+                    <Image source={{ uri: tile.logoUri }} style={[styles.tileLogo, { width: iconSize * 1.4, height: iconSize * 1.4, borderRadius: iconSize * 0.7 }]} />
+                  ) : (
+                    <Text style={[styles.categoryIcon, { fontSize: iconSize }]}>{tile.icon}</Text>
+                  )}
                   <Text style={[styles.categoryText, { fontSize: catTextSize }]}>{tile.label}</Text>
                 </View>
               )}
@@ -510,10 +522,15 @@ function RootScreens() {
     useState<'menu' | 'parent'>('menu');
 
   const handleExitChildModeRequest = useCallback(() => {
+    // PIN bypassed via parent setting? Jump straight back to main menu.
+    if (state.pinEnabled === false) {
+      setScreen('menu');
+      return;
+    }
     setTargetScreenAfterPin('menu');
     setPinInput('');
     setShowPinDialog(true);
-  }, []);
+  }, [state.pinEnabled]);
 
   // Hardware back button: blocked in child screens, used as in-app
   // navigation everywhere else.
@@ -531,6 +548,10 @@ function RootScreens() {
   const handleEnterChildMode = () => setScreen('child_menu');
 
   const handleParentModeRequest = () => {
+    if (state.pinEnabled === false) {
+      setScreen('parent');
+      return;
+    }
     setTargetScreenAfterPin('parent');
     setPinInput('');
     setShowPinDialog(true);
@@ -767,6 +788,11 @@ export const styles = StyleSheet.create({
     textShadowColor: 'rgba(0,0,0,0.6)',
     textShadowOffset: { width: 1, height: 1 },
     textShadowRadius: 6,
+  },
+  tileLogo: {
+    marginBottom: 8,
+    borderWidth: 3,
+    borderColor: 'rgba(255,255,255,0.85)',
   },
   categoryIcon: { fontSize: 46, fontFamily: FONT_BOLD, color: 'white', marginBottom: 6 },
   categoryText: { fontSize: 20, fontFamily: FONT_BOLD, color: 'white' },

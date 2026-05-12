@@ -50,7 +50,9 @@ type StringKey =
   | 'settings_categories_label'
   | 'item_not_found' | 'recording_error' | 'error_generic'
   | 'folders_label' | 'folder_add' | 'folder_name_placeholder'
-  | 'folder_delete_title' | 'folder_delete_msg';
+  | 'folder_delete_title' | 'folder_delete_msg'
+  | 'pin_protection_label' | 'pin_protection_on' | 'pin_protection_off'
+  | 'folder_logo_set' | 'folder_logo_clear';
 
 type StringTable = Record<StringKey, string>;
 
@@ -135,6 +137,7 @@ export const STRINGS: Record<LanguageCode, StringTable> = {
     settings_categories_label: '✏️ Nazwy kategorii',
     item_not_found: 'Nie znaleziono.', recording_error: 'Błąd nagrywania', error_generic: 'Błąd',
     folders_label: '📁 Twoje foldery', folder_add: '➕ Nowy folder', folder_name_placeholder: 'np. Owoce / Ubrania', folder_delete_title: 'Usunąć folder?', folder_delete_msg: 'Folder i wszystkie fiszki w nim zostaną usunięte na stałe.',
+    pin_protection_label: '🔒 Ochrona PIN-em', pin_protection_on: 'PIN wymagany', pin_protection_off: 'Brak PIN-u', folder_logo_set: '📷 Logo folderu', folder_logo_clear: '↺ Domyślne',
   },
   en: {
     loading: 'Loading…',
@@ -214,6 +217,7 @@ export const STRINGS: Record<LanguageCode, StringTable> = {
     settings_categories_label: '✏️ Category names',
     item_not_found: 'Not found.',     recording_error: 'Recording error',  error_generic: 'Error',
     folders_label: '📁 Your folders', folder_add: '➕ New folder', folder_name_placeholder: 'e.g. Fruits / Clothes', folder_delete_title: 'Delete folder?', folder_delete_msg: 'The folder and all its flashcards will be permanently removed.',
+    pin_protection_label: '🔒 PIN protection', pin_protection_on: 'PIN required', pin_protection_off: 'No PIN', folder_logo_set: '📷 Folder logo', folder_logo_clear: '↺ Default',
   },
   de: {
     loading: 'Lädt…',
@@ -292,6 +296,7 @@ export const STRINGS: Record<LanguageCode, StringTable> = {
     settings_categories_label: '✏️ Kategorienamen',
     item_not_found: 'Nicht gefunden.', recording_error: 'Aufnahmefehler',  error_generic: 'Fehler',
     folders_label: '📁 Deine Ordner', folder_add: '➕ Neuer Ordner', folder_name_placeholder: 'z.B. Obst / Kleidung', folder_delete_title: 'Ordner löschen?', folder_delete_msg: 'Der Ordner und alle Karten darin werden dauerhaft gelöscht.',
+    pin_protection_label: '🔒 PIN-Schutz', pin_protection_on: 'PIN erforderlich', pin_protection_off: 'Kein PIN', folder_logo_set: '📷 Ordnerlogo', folder_logo_clear: '↺ Standard',
   },
   es: {
     loading: 'Cargando…',
@@ -370,6 +375,7 @@ export const STRINGS: Record<LanguageCode, StringTable> = {
     settings_categories_label: '✏️ Nombres de categorías',
     item_not_found: 'No encontrado.', recording_error: 'Error de grabación', error_generic: 'Error',
     folders_label: '📁 Tus carpetas', folder_add: '➕ Nueva carpeta', folder_name_placeholder: 'p.ej. Frutas / Ropa', folder_delete_title: '¿Eliminar carpeta?', folder_delete_msg: 'La carpeta y todas sus tarjetas se eliminarán permanentemente.',
+    pin_protection_label: '🔒 Protección con PIN', pin_protection_on: 'PIN obligatorio', pin_protection_off: 'Sin PIN', folder_logo_set: '📷 Logo de carpeta', folder_logo_clear: '↺ Predeterminado',
   },
   fr: {
     loading: 'Chargement…',
@@ -448,6 +454,7 @@ export const STRINGS: Record<LanguageCode, StringTable> = {
     settings_categories_label: '✏️ Noms des catégories',
     item_not_found: 'Introuvable.',   recording_error: 'Erreur d\'enregistrement', error_generic: 'Erreur',
     folders_label: '📁 Tes dossiers', folder_add: '➕ Nouveau dossier', folder_name_placeholder: 'ex. Fruits / Vêtements', folder_delete_title: 'Supprimer le dossier ?', folder_delete_msg: 'Le dossier et toutes ses cartes seront supprimés définitivement.',
+    pin_protection_label: '🔒 Protection par code', pin_protection_on: 'Code requis', pin_protection_off: 'Sans code', folder_logo_set: '📷 Logo du dossier', folder_logo_clear: '↺ Par défaut',
   },
   it: {
     loading: 'Caricamento…',
@@ -526,6 +533,7 @@ export const STRINGS: Record<LanguageCode, StringTable> = {
     settings_categories_label: '✏️ Nomi categorie',
     item_not_found: 'Non trovato.',  recording_error: 'Errore di registrazione', error_generic: 'Errore',
     folders_label: '📁 Le tue cartelle', folder_add: '➕ Nuova cartella', folder_name_placeholder: 'es. Frutta / Vestiti', folder_delete_title: 'Eliminare la cartella?', folder_delete_msg: 'La cartella e tutte le sue carte saranno eliminate definitivamente.',
+    pin_protection_label: '🔒 Protezione PIN', pin_protection_on: 'PIN richiesto', pin_protection_off: 'Nessun PIN', folder_logo_set: '📷 Logo cartella', folder_logo_clear: '↺ Predefinito',
   },
   uk: {
     loading: 'Завантаження…',
@@ -604,6 +612,7 @@ export const STRINGS: Record<LanguageCode, StringTable> = {
     settings_categories_label: '✏️ Назви категорій',
     item_not_found: 'Не знайдено.', recording_error: 'Помилка запису',  error_generic: 'Помилка',
     folders_label: '📁 Твої папки', folder_add: '➕ Нова папка', folder_name_placeholder: 'напр. Фрукти / Одяг', folder_delete_title: 'Видалити папку?', folder_delete_msg: 'Папка та всі картки в ній буде видалено назавжди.',
+    pin_protection_label: '🔒 Захист PIN', pin_protection_on: 'PIN потрібен', pin_protection_off: 'Без PIN', folder_logo_set: '📷 Логотип папки', folder_logo_clear: '↺ Стандарт',
   },
 };
 

@@ -85,6 +85,8 @@ import {
   isCustomCategory,
   setCategoryHidden,
   isCategoryHidden,
+  setPinEnabled,
+  setCategoryLogo,
 } from './state';
 import { useApp } from './AppContext';
 import { PillButton, RoundButton } from './Buttons';
@@ -173,6 +175,7 @@ export function ParentApp({ onExit }: { onExit: () => void }) {
           })),
         ].map((c) => {
           const count = buildItemsForCategory(c.id, state, lang).length;
+          const logoUri = profile.categoryLogos?.[c.id];
           return (
             <TouchableOpacity
               key={c.id}
@@ -180,7 +183,12 @@ export function ParentApp({ onExit }: { onExit: () => void }) {
               onPress={() => setScreen({ kind: 'category', cat: c.id })}
             >
               <View style={appStyles.tileBg}>
-                <Text style={[appStyles.categoryIcon, { fontSize: iconSize }]}>{c.emoji}</Text>
+                {logoUri ? (
+                  <Image source={{ uri: logoUri }}
+                         style={{ width: iconSize * 1.4, height: iconSize * 1.4, borderRadius: iconSize * 0.7, marginBottom: 6, borderWidth: 3, borderColor: 'rgba(255,255,255,0.85)' }} />
+                ) : (
+                  <Text style={[appStyles.categoryIcon, { fontSize: iconSize }]}>{c.emoji}</Text>
+                )}
                 <Text style={[appStyles.categoryText, { fontSize: catTextSize }]}>{c.label}</Text>
                 <Text style={{ color: '#fff', fontSize: rs(12, 15) }}>{tn('count_items', { n: count })}</Text>
               </View>
@@ -990,19 +998,11 @@ function AddCustomItem({
   }, []);
 
   const onSave = useCallback(async () => {
+    // Only the image is mandatory — caption and voice recording are
+    // optional so a parent can drop a photo of grandma straight in,
+    // then add voice later (or never).
     if (!imageUri) {
       Alert.alert(t('no_image_selected'), t('no_image_selected_msg'));
-      return;
-    }
-    if (!label.trim()) {
-      Alert.alert(t('no_caption'), t('no_caption_msg'));
-      return;
-    }
-    if (recordings.length === 0) {
-      Alert.alert(
-        t('no_recording'),
-        t('no_recording_msg'),
-      );
       return;
     }
     setBusy(true);
@@ -1013,7 +1013,7 @@ function AddCustomItem({
         imageUri,
         label: label.trim(),
         recordings,
-        selectedRecordingId: selectedId || recordings[0].id,
+        selectedRecordingId: recordings.length > 0 ? (selectedId || recordings[0].id) : null,
         createdAt: Date.now(),
       };
       await persist(addCustomItem(state, item));
@@ -1162,8 +1162,40 @@ function Settings({ onBack }: { onBack: () => void }) {
   const { state, persist, profile, t } = useApp();
   const [labels, setLabels] = useState({ ...profile.categoryLabels });
   const [pin, setPin] = useState(state.pin);
+  const [pinEnabled, setPinEnabledState] = useState(state.pinEnabled !== false);
   const [language, setLanguageState] = useState<LanguageCode>(state.language);
   const [newFolderName, setNewFolderName] = useState('');
+
+  /** Shared "pick an image from gallery, copy to app dir, set as folder logo". */
+  const pickFolderLogo = async (catId: string, existing?: string) => {
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) {
+      Alert.alert(t('no_permission_camera_short'), t('no_permission_gallery'));
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      quality: 0.85,
+      allowsEditing: true,
+      aspect: [1, 1],
+    });
+    if (result.canceled || !result.assets?.[0]) return;
+    const src = result.assets[0].uri;
+    const ext = src.split('.').pop()?.split('?')[0] || 'jpg';
+    const dest = `${IMAGES_DIR}logo_${uuid()}.${ext}`;
+    try {
+      await FileSystem.copyAsync({ from: src, to: dest });
+      if (existing) await deleteFileQuietly(existing);
+      await persist(setCategoryLogo(state, catId, dest));
+    } catch (e) {
+      console.warn('pickFolderLogo', e);
+    }
+  };
+
+  const clearFolderLogo = async (catId: string, existing?: string) => {
+    if (existing) await deleteFileQuietly(existing);
+    await persist(setCategoryLogo(state, catId, null));
+  };
 
   const onSave = async () => {
     let next = state;
@@ -1176,7 +1208,7 @@ function Settings({ onBack }: { onBack: () => void }) {
         if (v) next = setCategoryLabel(next, cat, v);
       });
     }
-    next = { ...next, pin: pin.trim() || '1234' };
+    next = { ...next, pin: pin.trim() || '1234', pinEnabled };
     await persist(next);
     onBack();
   };
@@ -1229,15 +1261,40 @@ function Settings({ onBack }: { onBack: () => void }) {
           secureTextEntry
         />
 
+        {/* PIN protection toggle — when off, parent panel is reachable
+            without entering the PIN. Useful for parents who don't need
+            to gate the device against curious toddlers. */}
+        <Text style={parentStyles.fieldLabel}>{t('pin_protection_label')}</Text>
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          <PillButton
+            color={pinEnabled ? 'green' : 'gray'} size="md"
+            label={t('pin_protection_on')}
+            onPress={() => setPinEnabledState(true)}
+          />
+          <PillButton
+            color={!pinEnabled ? 'red' : 'gray'} size="md"
+            label={t('pin_protection_off')}
+            onPress={() => setPinEnabledState(false)}
+          />
+        </View>
+
         {/* Folder management — all built-in + custom in one list */}
         <Text style={[parentStyles.fieldLabel, { marginTop: 28 }]}>
           {t('folders_label')}
         </Text>
         {CATS.map((c) => {
           const hidden = isCategoryHidden(profile, c.id);
+          const logoUri = profile.categoryLogos?.[c.id];
           return (
             <View key={c.id} style={parentStyles.folderRow}>
-              <Text style={{ fontSize: 28, marginRight: 8 }}>{c.emoji}</Text>
+              {logoUri ? (
+                <TouchableOpacity onPress={() => pickFolderLogo(c.id, logoUri)}
+                                  onLongPress={() => clearFolderLogo(c.id, logoUri)}>
+                  <Image source={{ uri: logoUri }} style={parentStyles.folderLogo} />
+                </TouchableOpacity>
+              ) : (
+                <Text style={{ fontSize: 28, marginRight: 8 }}>{c.emoji}</Text>
+              )}
               <TextInput
                 style={[parentStyles.textInput, { flex: 1 }]}
                 value={labels[c.id]}
@@ -1246,19 +1303,33 @@ function Settings({ onBack }: { onBack: () => void }) {
                 placeholder={c.id}
               />
               <RoundButton
+                color="blue" size={44} label="📷"
+                onPress={() => pickFolderLogo(c.id, logoUri)}
+                style={{ marginLeft: 6 }}
+              />
+              <RoundButton
                 color={hidden ? 'green' : 'gray'} size={44}
                 label={hidden ? '👁' : '🙈'}
                 onPress={async () => {
                   await persist(setCategoryHidden(state, c.id, !hidden));
                 }}
-                style={{ marginLeft: 8 }}
+                style={{ marginLeft: 6 }}
               />
             </View>
           );
         })}
-        {profile.customCategories.map((cc) => (
+        {profile.customCategories.map((cc) => {
+          const logoUri = profile.categoryLogos?.[cc.id];
+          return (
           <View key={cc.id} style={parentStyles.folderRow}>
-            <Text style={{ fontSize: 28, marginRight: 8 }}>{cc.emoji}</Text>
+            {logoUri ? (
+              <TouchableOpacity onPress={() => pickFolderLogo(cc.id, logoUri)}
+                                onLongPress={() => clearFolderLogo(cc.id, logoUri)}>
+                <Image source={{ uri: logoUri }} style={parentStyles.folderLogo} />
+              </TouchableOpacity>
+            ) : (
+              <Text style={{ fontSize: 28, marginRight: 8 }}>{cc.emoji}</Text>
+            )}
             <TextInput
               style={[parentStyles.textInput, { flex: 1 }]}
               defaultValue={cc.name}
@@ -1269,6 +1340,11 @@ function Settings({ onBack }: { onBack: () => void }) {
                 }
               }}
               maxLength={32}
+            />
+            <RoundButton
+              color="blue" size={44} label="📷"
+              onPress={() => pickFolderLogo(cc.id, logoUri)}
+              style={{ marginLeft: 6 }}
             />
             <RoundButton
               color="red" size={44} label="🗑"
@@ -1297,7 +1373,8 @@ function Settings({ onBack }: { onBack: () => void }) {
               style={{ marginLeft: 8 }}
             />
           </View>
-        ))}
+          );
+        })}
 
         {/* Add new folder */}
         <View style={[parentStyles.folderRow, { marginTop: 8 }]}>
@@ -1565,5 +1642,13 @@ const parentStyles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 10,
+  },
+  folderLogo: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    marginRight: 8,
+    borderWidth: 2,
+    borderColor: '#fff',
   },
 });

@@ -75,12 +75,19 @@ export type LanguageProfile = {
    *  deleted outright; built-ins can only be hidden so they can be
    *  restored later. */
   hiddenCategories?: CategoryId[];
+  /** Optional per-folder logo image (file:// uri). Keyed by category id
+   *  — works for built-in ('letters', etc.) and custom ('cat_<uuid>') alike.
+   *  When present, tile rendering uses the image instead of the emoji. */
+  categoryLogos?: Record<string, string>;
 };
 
 export type PersistedState = {
   language: LanguageCode;
   profiles: Record<LanguageCode, LanguageProfile>;
   pin: string;
+  /** When false, parent panel is reachable without entering the PIN.
+   *  Default true. */
+  pinEnabled?: boolean;
   kioskEnabled: boolean; // ignored at runtime; kept for backward compat
 };
 
@@ -134,7 +141,28 @@ function emptyProfile(lang: LanguageCode): LanguageProfile {
     categoryLabels: { ...(CATEGORY_LABELS_BY_LANG[lang] || DEFAULT_LABELS) },
     customCategories: [],
     hiddenCategories: [],
+    categoryLogos: {},
   };
+}
+
+/** Toggle whether opening the parent panel / exiting child mode requires
+ *  the PIN. When disabled the parent panel is reachable directly. */
+export function setPinEnabled(state: PersistedState, enabled: boolean): PersistedState {
+  return { ...state, pinEnabled: enabled };
+}
+
+/** Set or clear a folder's custom logo (file:// URI). Pass null to revert
+ *  to the emoji fallback. Works for built-in and custom folders alike. */
+export function setCategoryLogo(
+  state: PersistedState,
+  catId: string,
+  uri: string | null,
+): PersistedState {
+  const p = currentProfile(state);
+  const logos = { ...(p.categoryLogos ?? {}) };
+  if (uri) logos[catId] = uri;
+  else delete logos[catId];
+  return patchProfile(state, { categoryLogos: logos });
 }
 
 /** Hide a built-in category from the child mode (Settings folder list). */
@@ -167,6 +195,7 @@ const DEFAULT_STATE: PersistedState = {
   language: 'pl',
   profiles: defaultProfiles(),
   pin: '1234',
+  pinEnabled: true,
   kioskEnabled: true,
 };
 
