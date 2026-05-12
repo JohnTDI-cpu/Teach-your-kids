@@ -47,7 +47,8 @@ type StringKey =
   | 'recording_default'
   | 'settings_title' | 'settings_language' | 'settings_language_warn'
   | 'settings_pin_label'
-  | 'settings_categories_label';
+  | 'settings_categories_label'
+  | 'item_not_found' | 'recording_error' | 'error_generic';
 
 type StringTable = Record<StringKey, string>;
 
@@ -130,6 +131,7 @@ export const STRINGS: Record<LanguageCode, StringTable> = {
     settings_language_warn: '⚠️ Każdy język ma własny zestaw nagrań i fiszek — przełączenie odsłania profil dla tego języka.',
     settings_pin_label: '🔑 Kod PIN rodzica',
     settings_categories_label: '✏️ Nazwy kategorii',
+    item_not_found: 'Nie znaleziono.', recording_error: 'Błąd nagrywania', error_generic: 'Błąd',
   },
   en: {
     loading: 'Loading…',
@@ -207,6 +209,7 @@ export const STRINGS: Record<LanguageCode, StringTable> = {
     settings_language_warn: '⚠️ Each language has its own recordings and flashcards — switching reveals that language\'s profile.',
     settings_pin_label: '🔑 Parent PIN',
     settings_categories_label: '✏️ Category names',
+    item_not_found: 'Not found.',     recording_error: 'Recording error',  error_generic: 'Error',
   },
   de: {
     loading: 'Lädt…',
@@ -283,6 +286,7 @@ export const STRINGS: Record<LanguageCode, StringTable> = {
     settings_language_warn: '⚠️ Jede Sprache hat eigene Aufnahmen und Karten — beim Wechsel siehst du das Profil dieser Sprache.',
     settings_pin_label: '🔑 Eltern-PIN',
     settings_categories_label: '✏️ Kategorienamen',
+    item_not_found: 'Nicht gefunden.', recording_error: 'Aufnahmefehler',  error_generic: 'Fehler',
   },
   es: {
     loading: 'Cargando…',
@@ -359,6 +363,7 @@ export const STRINGS: Record<LanguageCode, StringTable> = {
     settings_language_warn: '⚠️ Cada idioma tiene sus propias grabaciones y tarjetas — al cambiar verás el perfil de ese idioma.',
     settings_pin_label: '🔑 PIN de padres',
     settings_categories_label: '✏️ Nombres de categorías',
+    item_not_found: 'No encontrado.', recording_error: 'Error de grabación', error_generic: 'Error',
   },
   fr: {
     loading: 'Chargement…',
@@ -435,6 +440,7 @@ export const STRINGS: Record<LanguageCode, StringTable> = {
     settings_language_warn: '⚠️ Chaque langue a ses propres enregistrements et cartes — changer affiche le profil de cette langue.',
     settings_pin_label: '🔑 Code parent',
     settings_categories_label: '✏️ Noms des catégories',
+    item_not_found: 'Introuvable.',   recording_error: 'Erreur d\'enregistrement', error_generic: 'Erreur',
   },
   it: {
     loading: 'Caricamento…',
@@ -511,6 +517,7 @@ export const STRINGS: Record<LanguageCode, StringTable> = {
     settings_language_warn: '⚠️ Ogni lingua ha le proprie registrazioni e carte — cambiando vedrai il profilo di quella lingua.',
     settings_pin_label: '🔑 PIN genitori',
     settings_categories_label: '✏️ Nomi categorie',
+    item_not_found: 'Non trovato.',  recording_error: 'Errore di registrazione', error_generic: 'Errore',
   },
   uk: {
     loading: 'Завантаження…',
@@ -587,6 +594,7 @@ export const STRINGS: Record<LanguageCode, StringTable> = {
     settings_language_warn: '⚠️ Кожна мова має власні записи та картки — перемикання показує профіль цієї мови.',
     settings_pin_label: '🔑 Батьківський PIN',
     settings_categories_label: '✏️ Назви категорій',
+    item_not_found: 'Не знайдено.', recording_error: 'Помилка запису',  error_generic: 'Помилка',
   },
 };
 

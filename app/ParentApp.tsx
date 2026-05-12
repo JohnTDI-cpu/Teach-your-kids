@@ -503,7 +503,7 @@ function ItemEditor({
       recTimerRef.current = setInterval(() => setRecElapsed((s) => s + 1), 1000);
     } catch (e: any) {
       console.error('startRecording error', e);
-      Alert.alert('Recording error', String(e?.message || e));
+      Alert.alert(t('recording_error'), String(e?.message || e));
     }
   }, []);
 
@@ -545,7 +545,7 @@ function ItemEditor({
       setVariantsExpanded(true);
     } catch (e: any) {
       console.error('stopRecording error', e);
-      Alert.alert('Błąd', String(e?.message || e));
+      Alert.alert(t('error_generic'), String(e?.message || e));
     }
   }, [recording, itemId, recordings.length, state, persist]);
 
@@ -627,9 +627,9 @@ function ItemEditor({
     return (
       <View style={[appStyles.container, { backgroundColor: '#f3f4f6' }]}>
         <TouchableOpacity style={appStyles.backBtn} onPress={onBack}>
-          <Text style={appStyles.backBtnText}>↩ Wróć</Text>
+          <Text style={appStyles.backBtnText}>{t('back')}</Text>
         </TouchableOpacity>
-        <Text style={appStyles.title}>Nie znaleziono.</Text>
+        <Text style={appStyles.title}>{t('item_not_found')}</Text>
       </View>
     );
   }
@@ -642,7 +642,7 @@ function ItemEditor({
   return (
     <View style={[appStyles.container, { backgroundColor: '#f3f4f6', alignItems: 'stretch' }]}>
       <TouchableOpacity style={appStyles.backBtn} onPress={onBack}>
-        <Text style={appStyles.backBtnText}>↩ Wróć</Text>
+        <Text style={appStyles.backBtnText}>{t('back')}</Text>
       </TouchableOpacity>
 
       <ScrollView contentContainerStyle={{ padding: 16, paddingTop: 70, alignItems: 'center' }}>
@@ -909,7 +909,7 @@ function AddCustomItem({
       recTimerRef.current = setInterval(() => setRecElapsed((s) => s + 1), 1000);
     } catch (e: any) {
       console.error('startRecording error', e);
-      Alert.alert('Recording error', String(e?.message || e));
+      Alert.alert(t('recording_error'), String(e?.message || e));
     }
   }, []);
 
@@ -948,7 +948,7 @@ function AddCustomItem({
       setVariantsExpanded(true);
     } catch (e: any) {
       console.error('stopRecording error', e);
-      Alert.alert('Błąd', String(e?.message || e));
+      Alert.alert(t('error_generic'), String(e?.message || e));
     }
   }, [recording, recordings.length]);
 
@@ -1011,7 +1011,7 @@ function AddCustomItem({
   return (
     <View style={[appStyles.container, { backgroundColor: '#f3f4f6', alignItems: 'stretch' }]}>
       <TouchableOpacity style={appStyles.backBtn} onPress={onBack}>
-        <Text style={appStyles.backBtnText}>↩ Wróć</Text>
+        <Text style={appStyles.backBtnText}>{t('back')}</Text>
       </TouchableOpacity>
 
       <ScrollView contentContainerStyle={{ padding: 16, paddingTop: 68 }}>
@@ -1161,7 +1161,7 @@ function Settings({ onBack }: { onBack: () => void }) {
   return (
     <View style={[appStyles.container, { backgroundColor: '#f3f4f6', alignItems: 'stretch' }]}>
       <TouchableOpacity style={appStyles.backBtn} onPress={onBack}>
-        <Text style={appStyles.backBtnText}>↩ Wróć</Text>
+        <Text style={appStyles.backBtnText}>{t('back')}</Text>
       </TouchableOpacity>
 
       <ScrollView contentContainerStyle={{ padding: 16, paddingTop: 68 }}>
