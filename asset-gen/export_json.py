@@ -19,6 +19,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(__file__))
 from content_data import ANIMALS, LETTERS, NUMBERS, COLORS, LANGUAGES
+from migrate_ascii_filenames import asciify
 
 data = {
     "languages": LANGUAGES,
@@ -32,10 +33,16 @@ data = {
 for lang, items in LETTERS.items():
     out = []
     for k, v in items.items():
-        word_safe = v["word"].lower().replace(" ", "_")
+        # ASCII-only filename — Metro mangled paths with Cyrillic /
+        # Polish/Spanish/French diacritic chars at bundle time, which made
+        # all UK letter cards behave as if they shared the same asset.
+        word_safe = asciify(v["word"])
+        # When the key already equals the word slug (collision-disambiguated
+        # entries like PL "sliwka"), don't append it twice.
+        fn = k if k == word_safe else f"{k}_{word_safe}"
         out.append({
             "id": f"letters_{lang}_{k}",
-            "filename": f"letters/{lang}/{k}_{word_safe}.webp",
+            "filename": f"letters/{lang}/{fn}.webp",
             "audio": f"{lang}/letter_{k}.mp3",
             "letter": v["letter"],
             "word": v["word"],
